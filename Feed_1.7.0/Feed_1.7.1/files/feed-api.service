@@ -1,0 +1,13 @@
+[Unit]
+Description=Bensn Feed API
+After=network.target
+
+[Service]
+WorkingDirectory=/var/www/feed/api
+ExecStart=/usr/bin/python3 /var/www/feed/api/app.py
+Restart=always
+RestartSec=5
+Environment="DATABASE_URL=postgresql://bensn:d83d9858e390ab609381dbb7e2dc86c3b6cb3025aaa179c1dc3702ffa1441a7d@localhost:5432/bensnos"
+
+[Install]
+WantedBy=multi-user.target

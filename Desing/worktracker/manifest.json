@@ -1,0 +1,36 @@
+{
+  "name": "Worktracker",
+  "short_name": "Worktracker",
+  "description": "Schichten, Pausen, Zigaretten — bensn.me",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0b",
+  "theme_color": "#0a0a0b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Pause Start",
+      "url": "/eingabe?action=pause_start",
+      "description": "Pause beginnen"
+    },
+    {
+      "name": "Pause Ende",
+      "url": "/eingabe?action=pause_end",
+      "description": "Pause beenden"
+    }
+  ]
+}

@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>bensn · Geteilter Feed</title>
+<meta name="description" content="Geteilter Journal-Feed.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/bensn.css">
+<style>
+:root {
+  --c-diary:     #e5b181;
+  --c-mood:      #b8ebd0;
+  --c-fits:      #C9B6BE;
+  --c-reflexion: #ffb400;
+  --c-symptome:  #f96f5d;
+  --c-therapie:  #9c3848;
+  --c-projekt:   #1d4e89;
+  --c-idea:      #6622cc;
+  --c-arbeit:    #065143;
+  --c-schicht:   #3BC14A;
+  --c-ui:        #00a6ed;
+}
+
+body { overscroll-behavior: none; }
+
+.app-wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 1.25rem 4rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.shared-banner {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+  padding: .5rem 0 0;
+}
+
+/* ── Filter Bar ── */
+.filter-bar {
+  display: flex;
+  gap: .35rem;
+  flex-wrap: nowrap;
+  padding: .75rem 0 1rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.filter-bar::-webkit-scrollbar { display: none; }
+
+.filter-btn {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: none;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.filter-btn:hover { border-color: var(--border-hover); color: var(--text); }
+.filter-btn[data-type="diary"].active      { border-color:var(--c-diary);     color:var(--c-diary);     background:rgba(229,177,129,.08); }
+.filter-btn[data-type="mood"].active       { border-color:var(--c-mood);      color:var(--c-mood);      background:rgba(184,235,208,.08); }
+.filter-btn[data-type="fit"].active        { border-color:var(--c-fits);      color:var(--c-fits);      background:rgba(201,182,190,.08); }
+.filter-btn[data-type="reflexion"].active  { border-color:var(--c-reflexion); color:var(--c-reflexion); background:rgba(255,180,0,.08); }
+.filter-btn[data-type="symptome"].active   { border-color:var(--c-symptome);  color:var(--c-symptome);  background:rgba(249,111,93,.08); }
+.filter-btn[data-type="therapie"].active   { border-color:var(--c-therapie);  color:var(--c-therapie);  background:rgba(156,56,72,.12); }
+.filter-btn[data-type="arbeit"].active     { border-color:#065143;            color:#065143;            background:rgba(6,81,67,.12); }
+.filter-btn[data-type="idea"].active       { border-color:#6622cc;            color:#6622cc;            background:rgba(102,34,204,.10); }
+.filter-btn[data-type="project_log"].active{ border-color:#1d4e89;            color:#1d4e89;            background:rgba(29,78,137,.12); }
+
+/* ── Day Separator ── */
+.day-sep { display: flex; align-items: center; gap: .75rem; margin: 1.5rem 0 .5rem; }
+.day-sep:first-child { margin-top: 0; }
+.day-sep-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.day-sep-line { flex: 1; height: 1px; background: var(--border); }
+
+#feed { display: flex; flex-direction: column; gap: .65rem; }
+
+/* ── Note Card ── */
+.note-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.25rem 1.25rem 1.25rem 1.6rem;
+  transition: border-color .2s;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: fadeUp .35s ease forwards;
+  position: relative;
+  overflow: hidden;
+}
+.note-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+.note-card:hover { border-color: var(--border-hover); }
+.note-card.type-diary::before        { background: var(--c-diary); }
+.note-card.type-mood::before         { background: var(--c-mood); }
+.note-card.type-reflexion::before,
+.note-card.type-reflexionen::before  { background: var(--c-reflexion); }
+.note-card.type-symptome::before,
+.note-card.type-symptom::before      { background: var(--c-symptome); }
+.note-card.type-therapie::before     { background: var(--c-therapie); }
+
+.note-meta { display: flex; align-items: center; gap: .5rem; margin-bottom: .6rem; }
+.note-type-badge {
+  font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .1em;
+  text-transform: uppercase; padding: 2px 7px; border-radius: 3px;
+  border: 1px solid currentColor; opacity: .85;
+}
+.badge-diary       { color: var(--c-diary); }
+.badge-mood        { color: var(--c-mood); }
+.badge-reflexion,
+.badge-reflexionen { color: var(--c-reflexion); }
+.badge-symptome,
+.badge-symptom     { color: var(--c-symptome); }
+.badge-therapie    { color: var(--c-therapie); }
+
+.note-date { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-left: auto; }
+.note-title { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; letter-spacing: -.01em; margin-bottom: .5rem; color: var(--text); }
+
+.note-body { font-family: 'DM Mono', monospace; font-size: 11.5px; color: var(--muted); line-height: 1.8; word-break: break-word; }
+.note-body h1, .note-body h2, .note-body h3 { font-family: 'Syne', sans-serif; font-weight: 700; color: var(--text); margin: .75rem 0 .3rem; letter-spacing: -.01em; }
+.note-body h1 { font-size: .95rem; } .note-body h2 { font-size: .88rem; } .note-body h3 { font-size: .82rem; color: var(--muted); }
+.note-body strong { color: var(--text); font-weight: 500; }
+.note-body em { font-style: italic; opacity: .85; }
+.note-body hr { border: none; border-top: 1px solid var(--border); margin: .75rem 0; }
+.note-body p { margin-bottom: .4rem; } .note-body p:last-child { margin-bottom: 0; }
+.note-body ul, .note-body ol { margin: .4rem 0 .5rem 1.2rem; }
+.note-body li { margin-bottom: .2rem; }
+.note-body blockquote { border-left: 3px solid rgba(255,255,255,.15); margin: .4rem 0; padding: .1rem 0 .1rem .75rem; color: rgba(232,230,224,.5); }
+.note-body blockquote p { margin: 0; }
+.note-body code { font-family: 'DM Mono', monospace; font-size: 10.5px; background: rgba(255,0,81,.06); border: 1px solid rgba(255,0,81,.2); border-radius: 3px; padding: 1px 5px; color: var(--c-fits); }
+
+.note-body-full { display: none; }
+.note-card.expanded .note-body-preview { display: none; }
+.note-card.expanded .note-body-full { display: block; }
+.note-expand { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--c-ui); cursor: pointer; margin-top: .5rem; display: inline-block; background: none; border: none; padding: 0; letter-spacing: .04em; }
+.note-expand:hover { opacity: .7; }
+
+/* ── Photo Grid ── */
+.photo-grid { margin-top: .75rem; border-radius: 10px; overflow: hidden; display: grid; gap: 3px; width: 100%; }
+.photo-grid.n1 { grid-template-columns: 1fr; }
+.photo-grid.n2 { grid-template-columns: 1fr 1fr; }
+.photo-grid.n3 { grid-template-columns: 1fr 1fr; }
+.photo-grid.n4 { grid-template-columns: 1fr 1fr; }
+.photo-grid.n5 { grid-template-columns: 1fr 1fr; }
+.photo-cell { position: relative; overflow: hidden; background: rgba(255,255,255,.04); cursor: pointer; }
+.photo-grid.n2 .photo-cell { aspect-ratio: 3/4; }
+.photo-grid.n3 .photo-cell:first-child { grid-column: 1 / -1; aspect-ratio: 16/9; }
+.photo-grid.n3 .photo-cell:not(:first-child) { aspect-ratio: 3/4; }
+.photo-grid.n4 .photo-cell { aspect-ratio: 1/1; }
+.photo-grid.n5 .photo-cell:nth-child(-n+2) { aspect-ratio: 3/4; }
+.photo-grid.n5 .photo-cell:nth-child(n+3) { aspect-ratio: 1/1; }
+.photo-cell.landscape { aspect-ratio: 4/3 !important; }
+.photo-grid.n2 .photo-cell.landscape { aspect-ratio: 16/9 !important; }
+.photo-cell img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; transition: opacity .2s; }
+.photo-grid.n1 .photo-cell img { height: auto; object-position: center; }
+.photo-cell:hover img { opacity: .88; }
+.photo-more { position: absolute; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-size: 1.4rem; font-weight: 700; color: #fff; pointer-events: none; }
+
+/* ── Lightbox ── */
+#lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 1000; align-items: center; justify-content: center; flex-direction: column; }
+#lightbox.open { display: flex; }
+#lightbox-img { max-width: 96vw; max-height: 88vh; object-fit: contain; border-radius: 6px; user-select: none; }
+#lightbox-close { position: fixed; top: 1.25rem; right: 1.25rem; width: 36px; height: 36px; background: rgba(255,255,255,.1); border: none; border-radius: 50%; color: #fff; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .15s; }
+#lightbox-close:hover { background: rgba(255,255,255,.2); }
+#lightbox-prev, #lightbox-next { position: fixed; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,.08); border: none; border-radius: 50%; width: 44px; height: 44px; color: #fff; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .15s; }
+#lightbox-prev { left: 1rem; } #lightbox-next { right: 1rem; }
+#lightbox-prev:hover, #lightbox-next:hover { background: rgba(255,255,255,.18); }
+#lightbox-counter { position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%); font-family: 'DM Mono', monospace; font-size: 11px; color: rgba(255,255,255,.5); pointer-events: none; }
+
+.state-msg { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); text-align: center; padding: 3rem 1rem; border: 1px dashed var(--border); border-radius: 16px; line-height: 1.8; }
+.load-more { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 8px; padding: 10px 20px; cursor: pointer; margin: 1.5rem auto 0; display: block; transition: border-color .15s, color .15s; }
+.load-more:hover { border-color: var(--c-ui); color: var(--c-ui); }
+footer { border-top: 1px solid var(--border); padding: 2rem 0 0; display: flex; justify-content: space-between; margin-top: auto; }
+
+/* ── Login Overlay ── */
+#login-overlay { position: fixed; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+#login-overlay.hidden { display: none; }
+#login-blur { position: fixed; inset: 0; backdrop-filter: blur(18px) saturate(0.4); -webkit-backdrop-filter: blur(18px) saturate(0.4); background: rgba(10,10,11,0.7); z-index: 0; }
+#login-modal { position: relative; z-index: 1; background: var(--surface); border: 1px solid var(--border-hover); border-radius: 20px; padding: 2rem 1.75rem; width: 100%; max-width: 360px; box-shadow: 0 24px 64px rgba(0,0,0,0.5); }
+.login-logo { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.75rem; }
+.login-logo-mark { width: 32px; height: 32px; border: 1px solid var(--border-hover); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.login-logo-text { font-family: 'DM Mono', monospace; font-size: 14px; color: var(--muted); }
+.login-logo-text span { color: var(--text); }
+.login-title { font-family: 'Syne', sans-serif; font-size: 1.3rem; font-weight: 800; letter-spacing: -.02em; margin-bottom: .35rem; }
+.login-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); margin-bottom: 1.5rem; }
+.login-field { margin-bottom: .85rem; }
+.login-field label { display: block; font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+.login-field input { width: 100%; background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; outline: none; transition: border-color .15s; }
+.login-field input:focus { border-color: var(--border-hover); }
+.login-error { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent-red); min-height: 1.2em; margin-bottom: .6rem; }
+.login-btn { width: 100%; background: var(--text); color: var(--bg); border: none; border-radius: 10px; padding: 11px; font-family: 'Syne', sans-serif; font-size: .95rem; font-weight: 700; cursor: pointer; transition: opacity .15s; }
+.login-btn:hover { opacity: .88; }
+
+/* ── oEmbed Cards ── */
+.embed-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: .5rem 0;
+  transition: border-color .15s;
+  background: var(--surface);
+}
+.embed-card:hover { border-color: var(--border-hover); }
+.embed-loading {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  padding: .75rem 1rem;
+}
+.embed-inner {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  padding: .75rem;
+  text-decoration: none;
+  color: inherit;
+}
+.embed-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 5px;
+  flex-shrink: 0;
+  background: rgba(255,255,255,.05);
+}
+.embed-thumb-wrap {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+}
+.embed-thumb-wrap .embed-thumb { width: 100%; height: 100%; }
+.embed-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,.45);
+  color: #fff;
+  font-size: .85rem;
+  border-radius: 5px;
+}
+.embed-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.embed-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.embed-badge-spotify { color: #1DB954; }
+.embed-badge-youtube { color: #FF0000; }
+.embed-title {
+  font-family: 'Syne', sans-serif;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.embed-artist {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.embed-arrow {
+  font-size: .9rem;
+  color: var(--muted);
+  flex-shrink: 0;
+  opacity: .5;
+}
+.embed-card-spotify { border-left: 2px solid #1DB954; }
+.embed-card-youtube { border-left: 2px solid #FF0000; }
+
+/* ── oEmbed Cards ── */
+.embed-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: .5rem 0;
+  transition: border-color .15s;
+  background: var(--surface);
+}
+.embed-card:hover { border-color: var(--border-hover); }
+.embed-loading {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  padding: .75rem 1rem;
+}
+.embed-inner {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  padding: .75rem;
+  text-decoration: none;
+  color: inherit;
+}
+.embed-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 5px;
+  flex-shrink: 0;
+  background: rgba(255,255,255,.05);
+}
+.embed-thumb-wrap {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+}
+.embed-thumb-wrap .embed-thumb { width: 100%; height: 100%; }
+.embed-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,.45);
+  color: #fff;
+  font-size: .85rem;
+  border-radius: 5px;
+}
+.embed-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.embed-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.embed-badge-spotify { color: #1DB954; }
+.embed-badge-youtube { color: #FF0000; }
+.embed-title {
+  font-family: 'Syne', sans-serif;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.embed-artist {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.embed-arrow {
+  font-size: .9rem;
+  color: var(--muted);
+  flex-shrink: 0;
+  opacity: .5;
+}
+.embed-card-spotify { border-left: 2px solid #1DB954; }
+.embed-card-youtube { border-left: 2px solid #FF0000; }
+
+/* ── Work / Schicht Cards (shared: no details) ── */
+.note-card.type-work_start::before,
+.note-card.type-work_pause::before,
+.note-card.type-work_end::before { background: var(--c-schicht); }
+.badge-work_start,.badge-work_pause,.badge-work_end { color: var(--c-schicht); }
+.filter-btn[data-type="schicht"].active { border-color:var(--c-schicht); color:var(--c-schicht); background:rgba(59,193,74,.08); }
+.work-card-headline { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; color: var(--text); letter-spacing: -.01em; margin-bottom: .25rem; }
+.work-card-body { font-family: 'DM Mono', monospace; font-size: 11.5px; color: var(--muted); line-height: 1.8; margin-top: .4rem; }
+.work-stat-row { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: .5rem; }
+.work-stat { display: flex; flex-direction: column; gap: 2px; }
+.work-stat-val { font-family: 'DM Mono', monospace; font-size: .95rem; font-weight: 500; color: var(--text); }
+.work-stat-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.work-shift-badge { display: inline-block; font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; border: 1px solid currentColor; margin-left: .4rem; vertical-align: middle; }
+.badge-frueh { color: #FFB400; }
+.badge-nacht { color: var(--accent-blue); }
+.badge-nachmittag { color: #F96F5D; }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="blobs" id="blobs"></div>
+
+<div class="app-wrap">
+  <nav class="app-nav">
+    <a href="https://bensn.me" class="nav-crumb"><span>bensn</span>.me</a>
+    <span class="nav-sep">/</span>
+    <span class="nav-current">feed</span>
+    <div class="nav-right">
+      <div class="dot" id="statusDot" style="background:var(--muted);animation:none"></div>
+      <span id="statusText">laden…</span>
+    </div>
+  </nav>
+
+  <div class="shared-banner">Geteilter Feed · nur ausgewählte Einträge</div>
+
+  <div class="filter-bar" id="filterBar">
+    <button class="filter-btn" data-type="diary">Diary</button>
+    <button class="filter-btn" data-type="mood">Mood</button>
+    <button class="filter-btn" data-type="reflexion">Reflection</button>
+    <button class="filter-btn" data-type="symptome">Symptoms</button>
+    <button class="filter-btn" data-type="therapie">Therapy</button>
+    <button class="filter-btn" data-type="schicht">Schichten</button>
+  </div>
+
+  <div id="feed"></div>
+
+  <footer>
+    <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">feed.bensn.me/shared</span>
+    <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)" id="footer-clock"></span>
+  </footer>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox">
+  <button id="lightbox-close" onclick="closeLightbox()">✕</button>
+  <button id="lightbox-prev" onclick="lightboxStep(-1)">‹</button>
+  <img id="lightbox-img" src="" alt="">
+  <button id="lightbox-next" onclick="lightboxStep(1)">›</button>
+  <div id="lightbox-counter"></div>
+</div>
+
+<!-- Guest Login Overlay -->
+<div id="login-overlay" class="hidden">
+  <div id="login-blur"></div>
+  <div id="login-modal">
+    <div class="login-logo">
+      <img src="/icons/icon-180.png" style="width:36px;height:36px;border-radius:8px;flex-shrink:0" alt="">
+      <span class="login-logo-text"><span>bensn</span>.me / feed</span>
+    </div>
+    <div class="login-title">Geteilter Feed</div>
+    <div class="login-sub">Bitte Passwort eingeben.</div>
+    <div class="login-field">
+      <label>Passwort</label>
+      <input type="password" id="login-pass" autocomplete="current-password">
+    </div>
+    <div class="login-error" id="login-error"></div>
+    <button class="login-btn" id="login-submit">Öffnen</button>
+  </div>
+</div>
+
+<script src="/shared/bensn.js"></script>
+<script>
+function pad(n){return String(n).padStart(2,'0')}
+function clockTick(){
+  const n=new Date(),el=document.getElementById('footer-clock');
+  if(el) el.textContent=pad(n.getHours())+':'+pad(n.getMinutes())+':'+pad(n.getSeconds());
+}
+clockTick(); setInterval(clockTick,1000);
+
+let allNotes=[], activeTypes=new Set(), page=0;
+const PAGE_SIZE=20, MAX_VISIBLE_PHOTOS=5;
+
+/* ── Lightbox ── */
+let _lbImages=[],_lbIdx=0;
+function openLightbox(images,idx){
+  _lbImages=images; _lbIdx=idx; _showLb();
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeLightbox(){
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow='';
+}
+function lightboxStep(dir){
+  _lbIdx=(_lbIdx+dir+_lbImages.length)%_lbImages.length; _showLb();
+}
+function _showLb(){
+  const img=_lbImages[_lbIdx];
+  document.getElementById('lightbox-img').src=img.url;
+  document.getElementById('lightbox-img').alt=img.alt||'';
+  document.getElementById('lightbox-counter').textContent=(_lbIdx+1)+' / '+_lbImages.length;
+  document.getElementById('lightbox-prev').style.display=_lbImages.length>1?'flex':'none';
+  document.getElementById('lightbox-next').style.display=_lbImages.length>1?'flex':'none';
+}
+document.getElementById('lightbox').addEventListener('click',function(e){
+  if(e.target===document.getElementById('lightbox')) closeLightbox();
+});
+document.addEventListener('keydown',function(e){
+  if(!document.getElementById('lightbox').classList.contains('open')) return;
+  if(e.key==='Escape') closeLightbox();
+  if(e.key==='ArrowLeft') lightboxStep(-1);
+  if(e.key==='ArrowRight') lightboxStep(1);
+});
+
+/* ── Photo Grid ── */
+function buildPhotoGrid(images){
+  const total=images.length, visible=images.slice(0,MAX_VISIBLE_PHOTOS), hidden=total-MAX_VISIBLE_PHOTOS;
+  const n=Math.min(total,MAX_VISIBLE_PHOTOS);
+  const grid=document.createElement('div');
+  grid.className='photo-grid n'+n;
+  visible.forEach(function(img,idx){
+    const cell=document.createElement('div');
+    cell.className='photo-cell';
+    const el=document.createElement('img');
+    el.src=img.url; el.alt=img.alt||''; el.loading='lazy';
+    el.addEventListener('load',function(){
+      if(el.naturalWidth>el.naturalHeight) cell.classList.add('landscape');
+    });
+    el.addEventListener('error',function(){ cell.style.display='none'; });
+    cell.addEventListener('click',function(){ openLightbox(images,idx); });
+    cell.appendChild(el);
+    if(hidden>0 && idx===MAX_VISIBLE_PHOTOS-1){
+      const ov=document.createElement('div');
+      ov.className='photo-more'; ov.textContent='+'+hidden;
+      cell.appendChild(ov);
+    }
+    grid.appendChild(cell);
+  });
+  return grid;
+}
+
+/* ── Helpers ── */
+function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function normalize(s){return(s||'').toLowerCase().replace(/[-_\s]+/g,' ').replace(/[^a-z0-9äöüß ]/g,'').trim();}
+
+function typeColor(type){
+  const m={
+    diary:'#e5b181', mood:'#b8ebd0', fits:'#C9B6BE', fit:'#C9B6BE',
+    reflexion:'#ffb400', reflexionen:'#ffb400',
+    symptome:'#f96f5d', symptom:'#f96f5d',
+    therapie:'#9c3848', arbeit:'#065143',
+    project_log:'#1d4e89', projectlog:'#1d4e89',
+    idea:'#6622cc', ideas:'#6622cc',
+    work_start:'#3BC14A', work_pause:'#3BC14A', work_end:'#3BC14A'
+  };
+  return m[(type||'').toLowerCase()]||'var(--muted)';
+}
+
+function inlineFmt(s, noteType){
+  const lc=typeColor(noteType);
+  return s
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\[\[([^\]|]+)\|?([^\]]*)\]\]/g,function(m,p1,p2){
+      return '<span style="color:'+lc+';opacity:.85">'+escHtml(p2||p1)+'</span>';
+    })
+    .replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/`([^`]+)`/g,'<code>$1</code>');
+}
+
+function renderMarkdown(raw, cleanedTitle, noteType){
+  if(!raw) return '';
+  let lines=raw.split('\n');
+  while(lines.length && lines[0].trim()==='') lines.shift();
+  if(lines.length && /^#\s+/.test(lines[0].trim())){
+    const h1text=lines[0].trim().replace(/^#+\s+/,'').trim();
+    const isDateH1=/^\d{1,2}\.\s+\w+\s+\d{4}/.test(h1text)||/^Mood\s*[–-]/.test(h1text)||/^\d{4}-\d{2}-/.test(h1text)||/^Fit\s*[–-]/.test(h1text);
+    const isTitleDupe=cleanedTitle && normalize(h1text)===normalize(cleanedTitle);
+    if(isDateH1||isTitleDupe) lines.shift();
+  }
+  while(lines.length && lines[0].trim()==='') lines.shift();
+  lines=lines.filter(function(l){return !/^!\[/.test(l.trim());});
+  while(lines.length && lines[lines.length-1].trim()==='') lines.pop();
+  const html=[]; let i=0;
+  while(i<lines.length){
+    const t=lines[i].trim();
+    if(t.startsWith('```')){i++;while(i<lines.length&&!lines[i].trim().startsWith('```'))i++;i++;continue;}
+    if(!t){html.push('<br>');i++;continue;}
+    if(/^### /.test(t)){html.push('<h3>'+inlineFmt(t.slice(4),noteType)+'</h3>');i++;continue;}
+    if(/^## /.test(t)){html.push('<h2>'+inlineFmt(t.slice(3),noteType)+'</h2>');i++;continue;}
+    if(/^# /.test(t)){html.push('<h1>'+inlineFmt(t.slice(2),noteType)+'</h1>');i++;continue;}
+    if(/^(-{3,}|\*{3,}|_{3,})$/.test(t)){html.push('<hr>');i++;continue;}
+    if(/^[-*] /.test(t)){
+      html.push('<ul>');
+      while(i<lines.length && /^[-*] /.test(lines[i].trim())){
+        html.push('<li>'+inlineFmt(lines[i].trim().slice(2),noteType)+'</li>'); i++;
+      }
+      html.push('</ul>'); continue;
+    }
+    if(/^\d+\. /.test(t)){
+      html.push('<ol>');
+      while(i<lines.length && /^\d+\. /.test(lines[i].trim())){
+        html.push('<li>'+inlineFmt(lines[i].trim().replace(/^\d+\. /,''),noteType)+'</li>'); i++;
+      }
+      html.push('</ol>'); continue;
+    }
+    if(/^> /.test(t)){
+      html.push('<blockquote>');
+      while(i<lines.length && /^> /.test(lines[i].trim())){
+        html.push('<p>'+inlineFmt(lines[i].trim().slice(2),noteType)+'</p>'); i++;
+      }
+      html.push('</blockquote>'); continue;
+    }
+    html.push('<p>'+inlineFmt(t,noteType)+'</p>'); i++;
+  }
+  return html.join('').replace(/(<br>){3,}/g,'<br><br>');
+}
+
+const TYPE_WORDS=['diary','mood','fits','fit','reflexion','reflexionen','symptome','symptom','therapie','arbeit','projectlog','project_log','idea','ideas'];
+function cleanTitle(title){
+  if(!title) return '';
+  let t=title.trim();
+  TYPE_WORDS.forEach(function(w){t=t.replace(new RegExp('^'+w+'[\\s_-]*','i'),'');});
+  t=t.replace(/^\d{4}-\d{2}-\d{2}(-\d{4})?[-_]?/,'');
+  return t.trim();
+}
+function fmtTime(iso){
+  if(!iso) return '';
+  return new Date(iso).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Vienna'});
+}
+function fmtDayLabel(iso){
+  if(!iso) return '—';
+  const vn=new Date().toLocaleDateString('en-CA',{timeZone:'Europe/Vienna'});
+  const vd=new Date(iso).toLocaleDateString('en-CA',{timeZone:'Europe/Vienna'});
+  const a=vn.split('-').map(Number), b=vd.split('-').map(Number);
+  const diff=Math.round((new Date(a[0],a[1]-1,a[2])-new Date(b[0],b[1]-1,b[2]))/86400000);
+  if(diff===0) return 'Heute';
+  if(diff===1) return 'Gestern';
+  return new Date(iso).toLocaleDateString('de-AT',{weekday:'long',day:'2-digit',month:'long',timeZone:'Europe/Vienna'});
+}
+function dayKey(iso){
+  if(!iso) return '';
+  return new Date(iso).toLocaleDateString('en-CA',{timeZone:'Europe/Vienna'});
+}
+function typeLabel(type){
+  const map={diary:'Diary',mood:'Mood',reflexion:'Reflection',reflexionen:'Reflection',
+    symptome:'Symptoms',symptom:'Symptoms',therapie:'Therapy',
+    work_start:'Dienstbeginn',work_pause:'Pause',work_end:'Dienstende'};
+  return map[(type||'').toLowerCase()]||type||'Note';
+}
+function badgeClass(type){return 'badge-'+(type||'').toLowerCase().replace(/\s/g,'_');}
+
+function toggleExpand(id,btn){
+  const card=document.getElementById(id);
+  card.classList.toggle('expanded');
+  btn.textContent=card.classList.contains('expanded')?'less ▴':'more ▾';
+}
+
+/* ── Work Event Renderer (shared: no zig, no notes) ── */
+
+/* ── oEmbed: Spotify + YouTube ── */
+function extractMediaUrl(line) {
+  const mdMatch = line.match(/\[([^\]]*)]\((https?:\/\/[^)]+)\)/);
+  const url = mdMatch ? mdMatch[2] : line.trim();
+  const spotify = url.match(/https:\/\/open\.spotify\.com\/(?:[a-z-]+\/)*(track|album|playlist|episode)\/([A-Za-z0-9]+)/);
+  if(spotify) return { type: 'spotify', url: url, kind: spotify[1], id: spotify[2] };
+  const ytFull = url.match(/https:\/\/(?:www\.)?youtube\.com\/watch\?v=([A-Za-z0-9_-]+)/);
+  const ytShort = url.match(/https:\/\/youtu\.be\/([A-Za-z0-9_-]+)/);
+  const yt = ytFull || ytShort;
+  if(yt) return { type: 'youtube', url: url, id: yt[1] };
+  return null;
+}
+function buildSpotifyCard(media) {
+  const el = document.createElement('div');
+  el.className = 'embed-card embed-spotify';
+  const embedUrl = 'https://open.spotify.com/embed/' + media.kind + '/' + media.id + '?utm_source=generator&theme=0';
+  el.innerHTML = '<iframe style="border-radius:8px;width:100%;height:80px;border:none;margin-top:.25rem" src="' + embedUrl + '" allowfullscreen allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>';
+  return el;
+}
+function buildYouTubeCard(media) {
+  const el = document.createElement('div');
+  el.className = 'embed-card embed-youtube';
+  const thumb = 'https://i.ytimg.com/vi/' + media.id + '/hqdefault.jpg';
+  el.innerHTML =
+    '<a class="embed-inner" href="' + media.url + '" target="_blank" rel="noopener">'
+    + '<div class="embed-thumb-wrap"><img class="embed-thumb" src="' + thumb + '" alt="" loading="lazy"><div class="embed-play">▶</div></div>'
+    + '<div class="embed-info">'
+    + '<div class="embed-badge embed-badge-youtube">YouTube</div>'
+    + '<div class="embed-title" id="yt-title-' + media.id + '">Laden…</div>'
+    + '</div><div class="embed-arrow">↗</div></a>';
+  fetch('https://www.youtube.com/oembed?url=' + encodeURIComponent(media.url) + '&format=json')
+    .then(function(r){return r.json();})
+    .then(function(d){const t=document.getElementById('yt-title-'+media.id);if(t)t.textContent=d.title||media.url;})
+    .catch(function(){const t=document.getElementById('yt-title-'+media.id);if(t)t.textContent=media.url;});
+  return el;
+}
+function processEmbeds(container) {
+  container.querySelectorAll('.embed-placeholder').forEach(function(span){
+    try{
+      const media = JSON.parse(span.getAttribute('data-embed'));
+      let card;
+      if(media.type==='spotify') card = buildSpotifyCard(media);
+      else if(media.type==='youtube') card = buildYouTubeCard(media);
+      if(card) span.parentNode.replaceChild(card, span);
+    }catch(e){}
+  });
+}
+
+function fmtDuration(min){
+  if(!min&&min!==0) return '—';
+  if(min<60) return min+' min';
+  return Math.floor(min/60)+'h '+(min%60?(min%60)+'m':'');
+}
+function shiftTypeBadge(stype){
+  const cls={früh:'badge-frueh',nachmittag:'badge-nachmittag',nacht:'badge-nacht'}[stype]||'';
+  const label={früh:'Früh',nachmittag:'Nachmittag',nacht:'Nacht'}[stype]||stype||'';
+  return label?'<span class="work-shift-badge '+cls+'">'+escHtml(label)+'</span>':'';
+}
+function breakTypeIcons(bt){
+  return '';
+}
+function renderWorkEvent(note,idx){
+  const type=note.type, id='note-'+idx;
+  const el=document.createElement('div');
+  el.id=id; el.className='note-card type-'+type; el.style.animationDelay=(idx%PAGE_SIZE*35)+'ms';
+  const metaHtml='<div class="note-meta"><span class="note-type-badge badge-'+type+'">'+typeLabel(type)+'</span>'+shiftTypeBadge(note.shift_type)+'<span class="note-date">'+fmtTime(note.date)+'</span></div>';
+  let body='';
+  if(type==='work_start'){
+    body='<div class="work-card-headline">'+escHtml(note.station)+'</div>';
+  } else if(type==='work_pause'){
+    body='<div class="work-card-headline">'+escHtml(note.break_type||'Pause')+'</div>';
+    body+='<div class="work-stat-row"><div class="work-stat"><div class="work-stat-val">'+fmtDuration(note.duration_minutes)+'</div><div class="work-stat-label">Dauer</div></div></div>';
+  } else if(type==='work_end'){
+    body='<div class="work-stat-row">';
+    body+='<div class="work-stat"><div class="work-stat-val" style="color:var(--green)">'+fmtDuration(note.netto_minutes)+'</div><div class="work-stat-label">Netto</div></div>';
+    if(note.total_break_minutes>0) body+='<div class="work-stat"><div class="work-stat-val" style="color:var(--orange)">'+note.total_break_minutes+' min</div><div class="work-stat-label">Pause gesamt</div></div>';
+    body+='</div>';
+  }
+  el.innerHTML=metaHtml+body;
+  return el;
+}
+
+function renderNote(note,idx){
+  const type=(note.type||'').toLowerCase();
+  if(type==='work_start'||type==='work_pause'||type==='work_end') return renderWorkEvent(note,idx);
+  const _type=(note.type||'').toLowerCase(), id='note-'+idx, raw=note.content||'', ct=cleanTitle(note.title);
+  const el=document.createElement('div');
+  el.id=id; el.className='note-card type-'+type; el.style.animationDelay=(idx%PAGE_SIZE*35)+'ms';
+  const titleHtml=ct&&ct.length>1?'<div class="note-title">'+escHtml(ct)+'</div>':'';
+  const metaHtml='<div class="note-meta"><span class="note-type-badge '+badgeClass(type)+'">'+typeLabel(type)+'</span><span class="note-date">'+fmtTime(note.date)+'</span></div>';
+  if(note.images && note.images.length>0){
+    const grid=buildPhotoGrid(note.images);
+    const textOnly=raw.split('\n').filter(function(l){return !/^!\[/.test(l.trim());}).join('\n').trim();
+    el.innerHTML=metaHtml+titleHtml;
+    el.appendChild(grid);
+    if(textOnly){
+      const body=document.createElement('div');
+      body.className='note-body'; body.style.marginTop='.75rem';
+      body.innerHTML=renderMarkdown(textOnly,ct,type);
+      el.appendChild(body);
+    }
+  } else if(raw.length>400){
+    const shortRaw=raw.slice(0,400).trimEnd()+'…';
+    el.innerHTML=metaHtml+titleHtml
+      +'<div class="note-body note-body-preview">'+renderMarkdown(shortRaw,ct,type)+'</div>'
+      +'<div class="note-body note-body-full">'+renderMarkdown(raw,ct,type)+'</div>'
+      +'<button class="note-expand" onclick="toggleExpand(\''+id+'\',this)">more ▾</button>';
+  } else {
+    el.innerHTML=metaHtml+titleHtml+'<div class="note-body">'+renderMarkdown(raw,ct,type)+'</div>';
+    processEmbeds(el);
+  }
+  return el;
+}
+
+function renderFeed(notes,append){
+  append=append||false;
+  const feed=document.getElementById('feed');
+  const lm=document.querySelector('.load-more'); if(lm) lm.remove();
+  if(!append){feed.innerHTML='';page=0;}
+  if(!notes.length&&!append){feed.innerHTML='<div class="state-msg">Keine Einträge gefunden.</div>';return;}
+  const start=page*PAGE_SIZE, slice=notes.slice(start,start+PAGE_SIZE);
+  let lastDay=append?(feed.dataset.lastDay||''):'';
+  slice.forEach(function(note,i){
+    const day=dayKey(note.date);
+    if(day!==lastDay){
+      const sep=document.createElement('div'); sep.className='day-sep';
+      sep.innerHTML='<span class="day-sep-label">'+fmtDayLabel(note.date)+'</span><div class="day-sep-line"></div>';
+      feed.appendChild(sep); lastDay=day;
+    }
+    feed.appendChild(renderNote(note,start+i));
+  });
+  feed.dataset.lastDay=lastDay;
+  if(notes.length>start+PAGE_SIZE){
+    const btn=document.createElement('button'); btn.className='load-more'; btn.textContent='Load more';
+    btn.onclick=function(){page++;renderFeed(notes,true);}; feed.after(btn);
+  }
+}
+
+function typeMatches(noteType,filterType){
+  const t=(noteType||'').toLowerCase();
+  if(filterType==='fit') return t==='fit'||t==='fits';
+  if(filterType==='reflexion') return t==='reflexion'||t==='reflexionen';
+  if(filterType==='symptome') return t==='symptome'||t==='symptom';
+  if(filterType==='idea') return t==='idea'||t==='ideas';
+  if(filterType==='project_log') return t==='project_log'||t==='projectlog';
+  if(filterType==='schicht') return t==='work_start'||t==='work_pause'||t==='work_end';
+  return t===filterType;
+}
+function applyFilter(){
+  const filtered=activeTypes.size===0?allNotes:allNotes.filter(function(n){
+    return Array.from(activeTypes).some(function(ft){return typeMatches(n.type,ft);});
+  });
+  page=0; renderFeed(filtered);
+}
+document.getElementById('filterBar').addEventListener('click',function(e){
+  const btn=e.target.closest('.filter-btn'); if(!btn) return;
+  const type=btn.dataset.type;
+  if(activeTypes.has(type)){activeTypes.delete(type);btn.classList.remove('active');}
+  else{activeTypes.add(type);btn.classList.add('active');}
+  applyFilter();
+});
+
+function buildFilterBar(notes){
+  const bar=document.getElementById('filterBar');
+  const labelMap={
+    diary:'Diary', mood:'Mood',
+    fit:'Fits', fits:'Fits',
+    reflexion:'Reflection', reflexionen:'Reflection',
+    symptome:'Symptoms', symptom:'Symptoms',
+    therapie:'Therapy', arbeit:'Work',
+    project_log:'Projects', projectlog:'Projects',
+    idea:'Ideas', ideas:'Ideas',
+    work_start:'Schichten', work_pause:'Schichten', work_end:'Schichten'
+  };
+  // Canonical key per label (for dedup + filter matching)
+  const canonMap={
+    fits:'fit', reflexionen:'reflexion', symptom:'symptome',
+    ideas:'idea', projectlog:'project_log',
+    work_start:'schicht', work_pause:'schicht', work_end:'schicht'
+  };
+  // Collect all types present
+  const seen=new Set(), buttons=[];
+  notes.forEach(function(n){
+    if(!n.type) return;
+    const t=n.type.toLowerCase();
+    const canon=canonMap[t]||t;
+    if(seen.has(canon)) return;
+    seen.add(canon);
+    buttons.push({key:canon, label:labelMap[t]||labelMap[canon]||(t.charAt(0).toUpperCase()+t.slice(1))});
+  });
+  // Sort by label
+  buttons.sort(function(a,b){return a.label.localeCompare(b.label);});
+  bar.innerHTML='';
+  buttons.forEach(function(b){
+    const btn=document.createElement('button');
+    btn.className='filter-btn';
+    btn.dataset.type=b.key;
+    btn.textContent=b.label;
+    bar.appendChild(btn);
+  });
+}
+
+async function loadFeed(){
+  const dot=document.getElementById('statusDot'), st=document.getElementById('statusText');
+  try{
+    const r=await fetch('/api/feed/combined/shared?limit=500');
+    if(!r.ok) throw new Error(r.status);
+    const data=await r.json();
+    allNotes=data.notes||[];
+    dot.style.background='var(--green)'; dot.style.animation='pulse 2s ease-in-out infinite';
+    st.textContent=allNotes.length+' entries';
+    buildFilterBar(allNotes);
+    renderFeed(allNotes);
+  }catch(e){
+    dot.style.background='var(--accent-red)'; dot.style.animation='none'; st.textContent='error';
+    document.getElementById('feed').innerHTML='<div class="state-msg">Verbindungsfehler<br><span style="font-size:11px;color:var(--accent-red)">'+e.message+'</span></div>';
+  }
+}
+
+/* ── Guest Auth ── */
+const GUEST_TOKEN='bensn_shared_2026';
+const GUEST_KEY='bensn_guest';
+function hideLoginOverlay(){document.getElementById('login-overlay').classList.add('hidden');}
+function initGuestAuth(){
+  if(localStorage.getItem(GUEST_KEY)===GUEST_TOKEN){
+    hideLoginOverlay(); loadFeed();
+  } else {
+    document.getElementById('login-overlay').classList.remove('hidden');
+    setTimeout(function(){document.getElementById('login-pass').focus();},80);
+  }
+}
+document.getElementById('login-submit').addEventListener('click',attemptGuestLogin);
+document.getElementById('login-pass').addEventListener('keydown',function(e){if(e.key==='Enter')attemptGuestLogin();});
+function attemptGuestLogin(){
+  const pass=document.getElementById('login-pass').value;
+  const err=document.getElementById('login-error');
+  if(pass===GUEST_TOKEN){
+    localStorage.setItem(GUEST_KEY,GUEST_TOKEN);
+    err.textContent=''; hideLoginOverlay(); loadFeed();
+  } else {
+    err.textContent='Falsches Passwort.';
+    document.getElementById('login-pass').value='';
+    document.getElementById('login-pass').focus();
+  }
+}
+initGuestAuth();
+
+</script>
+</body>
+</html>

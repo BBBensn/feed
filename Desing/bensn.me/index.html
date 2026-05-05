@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>bensn.me</title>
+<meta name="description" content="Persönliche self-hosted Infrastruktur.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/bensn.css">
+<style>
+  .services { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 5rem; }
+  @media (max-width: 560px) { .services { grid-template-columns: 1fr; } }
+
+  .card-pdf::before   { background: radial-gradient(circle at top right, rgba(255,0,81,0.12) 0%, transparent 60%); }
+  .card-data::before  { background: radial-gradient(circle at top right, rgba(0,166,251,0.10) 0%, transparent 60%); }
+  .card-wt::before    { background: radial-gradient(circle at top right, rgba(74,222,128,0.09) 0%, transparent 60%); }
+
+  .card-pdf .card-icon  { background: rgba(255,0,81,0.12);   border: 1px solid rgba(255,0,81,0.2); }
+  .card-data .card-icon { background: rgba(0,166,251,0.10);  border: 1px solid rgba(0,166,251,0.15); }
+  .card-wt .card-icon   { background: rgba(74,222,128,0.09); border: 1px solid rgba(74,222,128,0.2); }
+
+  .card-pdf .card-domain  { color: var(--accent-red); }
+  .card-data .card-domain { color: var(--accent-blue); }
+  .card-wt .card-domain   { color: var(--green); }
+
+  .card-pdf .card-arrow svg  { stroke: var(--accent-red); }
+  .card-data .card-arrow svg { stroke: var(--accent-blue); }
+  .card-wt .card-arrow svg   { stroke: var(--green); }
+
+  .app-nav {
+    display: flex;
+    align-items: center;
+    padding-top: max(env(safe-area-inset-top), 1rem);
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1rem;
+  }
+  .nav-crumb {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+    text-decoration: none;
+    letter-spacing: .02em;
+    display: flex;
+    align-items: center;
+    padding: .75rem 0;
+  }
+  .nav-crumb span { color: var(--text); font-weight: 500; }
+  .nav-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    flex-shrink: 0;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .hero-mini { padding: 2.5rem 0 2rem; }
+  .meta { padding: 2rem 0 4rem; display: flex; gap: 2rem; flex-wrap: wrap; }
+  .meta-item { display: flex; flex-direction: column; gap: 4px; }
+  .meta-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .meta-value { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="blobs" id="blobs"></div>
+
+<div class="wrap">
+  <nav class="app-nav intro-fade" style="animation-delay:0.05s">
+    <span class="nav-crumb"><span>bensn</span>.me</span>
+    <div class="nav-right">
+      <div class="dot"></div>
+      <span>alle services aktiv</span>
+    </div>
+  </nav>
+
+  <div class="hero-mini intro-fade" style="animation-delay:0.1s">
+    <div class="eyebrow">Hetzner CX23 · Wien · 178.104.133.228</div>
+  </div>
+
+  <div class="services">
+    <a class="card card-pdf intro-fade" href="https://pdf.bensn.me" target="_blank" rel="noopener" style="animation-delay:0.15s">
+      <div class="card-arrow">
+        <svg viewBox="0 0 14 14" fill="none" stroke-width="1.5"><path d="M2 12L12 2M12 2H5M12 2V9"/></svg>
+      </div>
+      <div class="card-inner">
+        <div class="card-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M4 4a2 2 0 012-2h6l4 4v10a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" stroke="#FF0051" stroke-width="1.5" stroke-linejoin="round"/>
+            <path d="M12 2v4h4" stroke="#FF0051" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 12h6M7 9h4" stroke="#FF0051" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="card-domain">pdf.bensn.me</div>
+        <div class="card-name">Stirling PDF</div>
+        <div class="card-desc">PDF bearbeiten, konvertieren, komprimieren — lokal, ohne Cloud.</div>
+        <div class="tag">Docker · Port 8081</div>
+      </div>
+    </a>
+
+    <a class="card card-data intro-fade" href="https://data.bensn.me" target="_blank" rel="noopener" style="animation-delay:0.22s">
+      <div class="card-arrow">
+        <svg viewBox="0 0 14 14" fill="none" stroke-width="1.5"><path d="M2 12L12 2M12 2H5M12 2V9"/></svg>
+      </div>
+      <div class="card-inner">
+        <div class="card-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M3 13l4-4 3 3 4-5 3 3" stroke="#00A6FB" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="2" y="2" width="16" height="16" rx="2" stroke="#00A6FB" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div class="card-domain">data.bensn.me</div>
+        <div class="card-name">Grafana</div>
+        <div class="card-desc">Wetterdaten Wien & Schwarzenau — Echtzeit-Visualisierung via InfluxDB.</div>
+        <div class="tag">Docker · Port 3000</div>
+      </div>
+    </a>
+
+    <a class="card card-wt intro-fade" href="https://worktracker.bensn.me" target="_blank" rel="noopener" style="animation-delay:0.29s">
+      <div class="card-arrow">
+        <svg viewBox="0 0 14 14" fill="none" stroke-width="1.5"><path d="M2 12L12 2M12 2H5M12 2V9"/></svg>
+      </div>
+      <div class="card-inner">
+        <div class="card-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="8" stroke="#4ade80" stroke-width="1.5"/>
+            <path d="M10 6v4l2.5 2.5" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="card-domain">worktracker.bensn.me</div>
+        <div class="card-name">Worktracker</div>
+        <div class="card-desc">Schichten, Pausen, Zigaretten — live vom Server.</div>
+        <div class="tag">Nginx · Port 80/443</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="divider intro-fade" style="animation-delay:0.35s"></div>
+
+  <div class="meta intro-fade" style="animation-delay:0.4s">
+    <div class="meta-item"><span class="meta-label">Server</span><span class="meta-value">Hetzner CX23</span></div>
+    <div class="meta-item"><span class="meta-label">OS</span><span class="meta-value">Ubuntu 24.04</span></div>
+    <div class="meta-item"><span class="meta-label">Proxy</span><span class="meta-value">Nginx + Certbot</span></div>
+    <div class="meta-item"><span class="meta-label">SSL</span><span class="meta-value">Let's Encrypt</span></div>
+    <div class="meta-item"><span class="meta-label">Stack</span><span class="meta-value">Docker Compose</span></div>
+  </div>
+
+  <footer class="intro-fade" style="animation-delay:0.45s">
+    <span class="footer-left">bensn.me</span>
+    <span class="footer-right">Wien, AT</span>
+  </footer>
+</div>
+
+<script src="/shared/bensn.js"></script>
+
+</body>
+</html>

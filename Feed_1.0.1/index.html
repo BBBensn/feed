@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feed · bensn.me</title>
+<meta name="description" content="Persönlicher Journal-Feed.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/bensn.css">
+<style>
+:root {
+  --c-diary:      #e5b181;
+  --c-mood:       #b8ebd0;
+  --c-fits:       #ff0051;
+  --c-reflexion:  #ffb400;
+  --c-symptome:   #f96f5d;
+  --c-therapie:   #9c3848;
+  --c-projekt:    #1d4e89;
+  --c-idea:       #6622cc;
+  --c-arbeit:     #065143;
+  --c-ui:         #00a6ed;
+}
+
+body { overscroll-behavior: none; }
+
+.app-wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 1.25rem 4rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Filter Bar ── */
+.filter-bar {
+  display: flex;
+  gap: .4rem;
+  flex-wrap: wrap;
+  padding: .75rem 0 1rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+.filter-btn {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: none;
+  cursor: pointer;
+  transition: all .15s;
+}
+.filter-btn:hover { border-color: var(--border-hover); color: var(--text); }
+.filter-btn[data-type=""].active      { border-color:var(--c-ui);        color:var(--c-ui);        background:rgba(0,166,237,.08); }
+.filter-btn[data-type="diary"].active    { border-color:var(--c-diary);    color:var(--c-diary);    background:rgba(229,177,129,.08); }
+.filter-btn[data-type="mood"].active     { border-color:var(--c-mood);     color:var(--c-mood);     background:rgba(184,235,208,.08); }
+.filter-btn[data-type="fits"].active     { border-color:var(--c-fits);     color:var(--c-fits);     background:rgba(255,0,81,.08); }
+.filter-btn[data-type="reflexion"].active{ border-color:var(--c-reflexion);color:var(--c-reflexion);background:rgba(255,180,0,.08); }
+.filter-btn[data-type="symptome"].active { border-color:var(--c-symptome); color:var(--c-symptome); background:rgba(249,111,93,.08); }
+.filter-btn[data-type="therapie"].active { border-color:var(--c-therapie); color:var(--c-therapie); background:rgba(156,56,72,.12); }
+.filter-btn[data-type="projekt"].active  { border-color:var(--c-projekt);  color:var(--c-projekt);  background:rgba(29,78,137,.12); }
+.filter-btn[data-type="idea"].active     { border-color:var(--c-idea);     color:var(--c-idea);     background:rgba(102,34,204,.10); }
+.filter-btn[data-type="arbeit"].active   { border-color:var(--c-arbeit);   color:var(--c-arbeit);   background:rgba(6,81,67,.12); }
+
+/* ── Day Separator ── */
+.day-sep {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin: 1.5rem 0 .5rem;
+}
+.day-sep:first-child { margin-top: 0; }
+.day-sep-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.day-sep-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ── Feed ── */
+#feed { display: flex; flex-direction: column; gap: .65rem; }
+
+/* ── Note Card ── */
+.note-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.25rem 1.25rem 1.25rem 1.6rem;
+  transition: border-color .2s;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: fadeUp .35s ease forwards;
+  position: relative;
+  overflow: hidden;
+}
+.note-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+}
+.note-card:hover { border-color: var(--border-hover); }
+
+.note-card.type-diary::before       { background: var(--c-diary); }
+.note-card.type-mood::before        { background: var(--c-mood); }
+.note-card.type-fits::before        { background: var(--c-fits); }
+.note-card.type-reflexion::before,
+.note-card.type-reflexionen::before { background: var(--c-reflexion); }
+.note-card.type-symptome::before,
+.note-card.type-symptom::before     { background: var(--c-symptome); }
+.note-card.type-therapie::before    { background: var(--c-therapie); }
+.note-card.type-project_log::before,
+.note-card.type-projectlog::before  { background: var(--c-projekt); }
+.note-card.type-idea::before,
+.note-card.type-ideas::before       { background: var(--c-idea); }
+.note-card.type-arbeit::before      { background: var(--c-arbeit); }
+
+.note-meta {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: .6rem;
+}
+.note-type-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  opacity: .85;
+}
+.badge-diary       { color: var(--c-diary); }
+.badge-mood        { color: var(--c-mood); }
+.badge-fits        { color: var(--c-fits); }
+.badge-reflexion,
+.badge-reflexionen { color: var(--c-reflexion); }
+.badge-symptome,
+.badge-symptom     { color: var(--c-symptome); }
+.badge-therapie    { color: var(--c-therapie); }
+.badge-project_log,
+.badge-projectlog  { color: var(--c-projekt); }
+.badge-idea,
+.badge-ideas       { color: var(--c-idea); }
+.badge-arbeit      { color: var(--c-arbeit); }
+
+.note-date {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: auto;
+}
+.note-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  margin-bottom: .4rem;
+  color: var(--text);
+}
+.note-body {
+  font-family: 'DM Mono', monospace;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.75;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.note-body-full { display: none; }
+.note-card.expanded .note-body-preview { display: none; }
+.note-card.expanded .note-body-full { display: block; }
+
+.note-expand {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--c-ui);
+  cursor: pointer;
+  margin-top: .5rem;
+  display: inline-block;
+  background: none;
+  border: none;
+  padding: 0;
+  letter-spacing: .04em;
+}
+.note-expand:hover { opacity: .7; }
+
+.note-image {
+  width: 100%;
+  max-height: 480px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-top: .75rem;
+  background: rgba(255,255,255,.03);
+}
+
+.state-msg {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 3rem 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  line-height: 1.8;
+}
+
+.load-more {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+  margin: 1.5rem auto 0;
+  display: block;
+  transition: border-color .15s, color .15s;
+}
+.load-more:hover { border-color: var(--c-ui); color: var(--c-ui); }
+
+footer {
+  border-top: 1px solid var(--border);
+  padding: 2rem 0 0;
+  display: flex;
+  justify-content: space-between;
+  margin-top: auto;
+}
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="blobs" id="blobs"></div>
+
+<div class="app-wrap">
+
+  <nav class="app-nav">
+    <a href="https://bensn.me" class="nav-crumb"><span>bensn</span>.me</a>
+    <span class="nav-sep">/</span>
+    <span class="nav-current">feed</span>
+    <div class="nav-right">
+      <div class="dot" id="statusDot" style="background:var(--muted);animation:none"></div>
+      <span id="statusText">laden…</span>
+    </div>
+  </nav>
+
+  <div class="filter-bar" id="filterBar">
+    <button class="filter-btn active" data-type="">Alle</button>
+    <button class="filter-btn" data-type="diary">Diary</button>
+    <button class="filter-btn" data-type="mood">Mood</button>
+    <button class="filter-btn" data-type="fits">Fits</button>
+    <button class="filter-btn" data-type="reflexion">Reflexion</button>
+    <button class="filter-btn" data-type="symptome">Symptome</button>
+    <button class="filter-btn" data-type="therapie">Therapie</button>
+    <button class="filter-btn" data-type="projekt">Projekte</button>
+    <button class="filter-btn" data-type="idea">Ideas</button>
+    <button class="filter-btn" data-type="arbeit">Arbeit</button>
+  </div>
+
+  <div id="feed"></div>
+
+  <footer>
+    <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">feed.bensn.me</span>
+    <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)" id="footer-clock"></span>
+  </footer>
+</div>
+
+<script src="/shared/bensn.js"></script>
+<script>
+function pad(n){return String(n).padStart(2,'0')}
+function clockTick(){
+  const n=new Date(),el=document.getElementById('footer-clock');
+  if(el) el.textContent=pad(n.getHours())+':'+pad(n.getMinutes())+':'+pad(n.getSeconds());
+}
+clockTick(); setInterval(clockTick,1000);
+
+let allNotes=[], activeType='', page=0;
+const PAGE_SIZE=20;
+
+function fmtTime(iso){
+  if(!iso) return '';
+  return new Date(iso).toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Vienna'});
+}
+function fmtDayLabel(iso){
+  if(!iso) return '—';
+  const d=new Date(iso), now=new Date();
+  const diff=Math.floor((now-d)/86400000);
+  if(diff===0) return 'Heute';
+  if(diff===1) return 'Gestern';
+  return d.toLocaleDateString('de-AT',{weekday:'long',day:'2-digit',month:'long',timeZone:'Europe/Vienna'});
+}
+function dayKey(iso){
+  if(!iso) return '';
+  return new Date(iso).toLocaleDateString('en-CA',{timeZone:'Europe/Vienna'});
+}
+function truncate(text,maxLen=280){
+  if(!text||text.length<=maxLen) return {short:text,truncated:false};
+  return {short:text.slice(0,maxLen).trimEnd()+'…',full:text,truncated:true};
+}
+function typeLabel(type){
+  const map={diary:'Diary',mood:'Mood',fits:'Fits',reflexion:'Reflexion',reflexionen:'Reflexion',
+    symptome:'Symptome',symptom:'Symptome',therapie:'Therapie',arbeit:'Arbeit',
+    project_log:'Projekt',projectlog:'Projekt',idea:'Idea',ideas:'Idea'};
+  return map[(type||'').toLowerCase()]||type||'Note';
+}
+function badgeClass(type){ return 'badge-'+(type||'').toLowerCase().replace(/\s/g,'_'); }
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function toggleExpand(id,btn){
+  const card=document.getElementById(id);
+  card.classList.toggle('expanded');
+  btn.textContent=card.classList.contains('expanded')?'weniger ▴':'mehr lesen ▾';
+}
+
+function renderNote(note,idx){
+  const type=(note.type||'').toLowerCase();
+  const {short,full,truncated}=truncate(note.content);
+  const id='note-'+idx;
+  let bodyHtml='';
+  if(note.images&&note.images.length>0){
+    bodyHtml+=note.images.map(img=>`<img class="note-image" src="${escHtml(img.url)}" alt="${escHtml(img.alt||'')}" loading="lazy" onerror="this.style.display='none'">`).join('');
+    if(note.content&&note.content.trim()) bodyHtml+=`<div class="note-body" style="margin-top:.75rem">${escHtml(note.content)}</div>`;
+  } else if(truncated){
+    bodyHtml=`<div class="note-body note-body-preview">${escHtml(short)}</div>
+      <div class="note-body note-body-full">${escHtml(full)}</div>
+      <button class="note-expand" onclick="toggleExpand('${id}',this)">mehr lesen ▾</button>`;
+  } else {
+    bodyHtml=`<div class="note-body">${escHtml(note.content||'')}</div>`;
+  }
+  const titleHtml=note.title&&note.title.length>2&&note.title.toLowerCase()!==type
+    ?`<div class="note-title">${escHtml(note.title)}</div>`:'';
+  const el=document.createElement('div');
+  el.id=id;
+  el.className=`note-card type-${type}`;
+  el.style.animationDelay=(idx%PAGE_SIZE*35)+'ms';
+  el.innerHTML=`
+    <div class="note-meta">
+      <span class="note-type-badge ${badgeClass(type)}">${typeLabel(type)}</span>
+      <span class="note-date">${fmtTime(note.date)}</span>
+    </div>
+    ${titleHtml}${bodyHtml}`;
+  return el;
+}
+
+function renderFeed(notes,append=false){
+  const feed=document.getElementById('feed');
+  document.querySelector('.load-more')?.remove();
+  if(!append){ feed.innerHTML=''; page=0; }
+  if(!notes.length&&!append){ feed.innerHTML='<div class="state-msg">Keine Einträge gefunden.</div>'; return; }
+
+  const start=page*PAGE_SIZE;
+  const slice=notes.slice(start,start+PAGE_SIZE);
+  let lastDay=append?(feed.dataset.lastDay||''):'';
+
+  slice.forEach((note,i)=>{
+    const day=dayKey(note.date);
+    if(day!==lastDay){
+      const sep=document.createElement('div');
+      sep.className='day-sep';
+      sep.innerHTML=`<span class="day-sep-label">${fmtDayLabel(note.date)}</span><div class="day-sep-line"></div>`;
+      feed.appendChild(sep);
+      lastDay=day;
+    }
+    feed.appendChild(renderNote(note,start+i));
+  });
+  feed.dataset.lastDay=lastDay;
+
+  if(notes.length>start+PAGE_SIZE){
+    const btn=document.createElement('button');
+    btn.className='load-more';
+    btn.textContent='Mehr laden';
+    btn.onclick=()=>{page++;renderFeed(notes,true);};
+    feed.after(btn);
+  }
+}
+
+document.getElementById('filterBar').addEventListener('click',e=>{
+  const btn=e.target.closest('.filter-btn');
+  if(!btn) return;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  activeType=btn.dataset.type;
+  page=0;
+  const filtered=activeType
+    ?allNotes.filter(n=>{
+        const t=(n.type||'').toLowerCase();
+        if(activeType==='reflexion') return t==='reflexion'||t==='reflexionen';
+        if(activeType==='symptome')  return t==='symptome'||t==='symptom';
+        if(activeType==='projekt')   return t==='project_log'||t==='projectlog';
+        if(activeType==='idea')      return t==='idea'||t==='ideas';
+        return t===activeType;
+      })
+    :allNotes;
+  renderFeed(filtered);
+});
+
+async function loadFeed(){
+  const dot=document.getElementById('statusDot'), st=document.getElementById('statusText');
+  try{
+    const r=await fetch('/api/feed?limit=500');
+    if(!r.ok) throw new Error(r.status);
+    const data=await r.json();
+    allNotes=data.notes||[];
+    dot.style.background='var(--green)'; dot.style.animation='pulse 2s ease-in-out infinite';
+    st.textContent=allNotes.length+' einträge';
+    renderFeed(allNotes);
+  }catch(e){
+    dot.style.background='var(--accent-red)'; dot.style.animation='none'; st.textContent='fehler';
+    document.getElementById('feed').innerHTML=`<div class="state-msg">Verbindungsfehler<br><span style="font-size:11px;color:var(--accent-red)">${e.message}</span></div>`;
+  }
+}
+loadFeed();
+</script>
+</body>
+</html>
