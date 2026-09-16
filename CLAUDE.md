@@ -9,7 +9,7 @@ Ablageort: `~/Documents/Coding/bensn-hub/feed/CLAUDE.md`
 
 - **Name:** Bensn-Feed
 - **Domain:** feed.bensn.me
-- **Version:** v2.4.0 (Edit/Delete, Tags-Anzeige, editierbarer Zeitpunkt, Limit-Fix)
+- **Version:** v2.5.0 (Design-Angleichung: `.btn-pill` statt Text-Links)
 - **Status:** active — Obsidian-Ablösung vollständig abgeschlossen (Compose-UI für alle 9
   Typen, komplette Historie migriert, Git-Sync abgeschaltet)
 - **Stack:** Vanilla JS + Flask (Python) + PostgreSQL, bensn.me Design System (`/shared/bensn.css`+`bensn.js`)
@@ -215,13 +215,18 @@ ein zweites HTTP-Client-Pattern wäre unnötig gewesen. Nur in `feed_combined()`
 
 ## Projekt-spezifische Konventionen
 
-- Backend (`app.py`) liest den Vault direkt von Disk für die 8 noch-nicht-migrierten Typen —
-  `journal_entries` in Postgres ist die Quelle für `mood`, sobald ein Typ vollständig auf
-  natives Compose umgestellt ist, sollte sein Obsidian-Lesepfad entfallen (siehe Roadmap)
-- `journal_row_to_note()` mappt DB-Zeilen auf exakt dasselbe Shape wie `load_note()`
-  (type/title/content/date/tags/meta) — der Feed-Renderer behandelt beide Quellen identisch,
-  ohne das zu wissen
-- `git pull --ff-only` funktioniert auf dem Server nicht → immer `fetch --all && reset --hard origin/main`
+- Backend liest ausschließlich aus `journal_entries` (Postgres) — kein Obsidian-Lesepfad
+  mehr seit v2.3.0, siehe "Obsidian Vault Sync — abgeschaltet" oben
+- `journal_row_to_note()` mappt DB-Zeilen auf dasselbe Shape, das früher `load_note()` aus
+  Obsidian-Dateien baute (type/title/content/date/tags/meta) — Altlast aus der Migration,
+  aber beibehalten, weil der ganze Feed-Renderer darauf aufbaut und ein Umbenennen keinen
+  echten Wert hätte
+- **Design-Sprache:** kleine Aktions-Buttons (Zeitpunkt ändern, Löschen) sind `.btn-pill` —
+  geborderte, großgeschriebene DM-Mono-Buttons, 1:1 aus `worktracker`s "Bearbeiten"/
+  "+ Pause"/"Löschen"-Buttons übernommen. Dieselbe Klasse existiert identisch in
+  `health.bensn.me`s `index.html` — neue kleine Buttons in beiden Apps sollten `.btn-pill`
+  verwenden statt eigene Text-Link-Styles zu erfinden, das war explizit der Wunsch nach
+  einer Design-Sprache, die sich an einer Stelle themen lässt
 - Service Worker Cache: `sw.js`-Cache-Version bumpen bei PWA-Updates
 
 ---
@@ -239,6 +244,7 @@ ein zweites HTTP-Client-Pattern wäre unnötig gewesen. Nur in `feed_combined()`
 | v2.2.0 | Compose-UI für restliche 8 Journal-Typen (Typ-Picker, generisches Formular, Body-Templates, Bild-Upload für Fits) | ✅ deployed (2026-09-16) |
 | v2.3.0 | Vollständige Historien-Migration (294 weitere Einträge, 8 Typen) + Obsidian-Decommission (Cron, Webhook, Vault-Clone, tote Routen/Tabellen entfernt) | ✅ deployed (2026-09-16) |
 | v2.4.0 | Bugfix: `limit=500` schnitt bei kombiniertem Pool (Journal+Worktracker+Health) Einträge vor dem 10. Mai ab (auf 5000 angehoben); Bugfix: Tags wurden gespeichert, aber nie angezeigt; Sync-Button entfernt (war für Git-Sync, tot seit v2.3.0); Edit-Zeitpunkt + Löschen für alle Journal-Einträge; Zeitpunkt-Feld (Standard jetzt, editierbar) in Mood- und generischem Compose-Sheet | ✅ deployed (2026-09-16) |
+| v2.5.0 | `.entry-action-btn`-Text-Links durch `.btn-pill` ersetzt (geborderte, großgeschriebene DM-Mono-Buttons, 1:1 aus `worktracker`s Bearbeiten/+Pause/Löschen übernommen) — Teil einer service-übergreifenden Design-Angleichung, dieselbe Klasse existiert jetzt identisch in `health.bensn.me` | ✅ deployed (2026-09-16) |
 
 Details zur vollständigen Versionshistorie: `docs/changelogs/CHANGELOG.md`.
 

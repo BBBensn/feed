@@ -367,13 +367,17 @@ mark {
 }
 .note-expand:hover { opacity: .7; }
 
-/* ── Entry tags + edit/delete actions ── */
+/* ── Entry tags ── */
 .entry-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: .5rem; }
 .entry-tag { font-family: 'DM Mono', monospace; font-size: 10px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); color: var(--muted); }
-.entry-actions { display: flex; gap: .8rem; margin-top: .6rem; }
-.entry-action-btn { font-family: 'DM Mono', monospace; font-size: 10px; background: none; border: none; color: var(--muted); cursor: pointer; padding: 0; letter-spacing: .04em; }
-.entry-action-btn:hover { color: var(--text); }
-.entry-action-btn.danger:hover { color: var(--accent-red); }
+.entry-actions { display: flex; gap: .5rem; margin-top: .6rem; }
+
+/* ── Shared small-action button (matches worktracker's Bearbeiten/+Pause/Löschen buttons —
+   same class as health.bensn.me, kept identical across services on purpose) ── */
+.btn-pill { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; background: none; border: 1px solid var(--border); color: var(--muted); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+.btn-pill:hover { border-color: var(--border-hover); color: var(--text); }
+.btn-pill.green { border-color: rgba(74,222,128,.3); color: var(--green); }
+.btn-pill.red { border-color: rgba(255,0,81,.3); color: var(--accent-red); }
 
 /* ── Photo Grid (Telegram-style) ── */
 .photo-grid {
@@ -1267,8 +1271,8 @@ function tagsHtml(note){
 function entryActionsHtml(note){
   if(!note.db_id) return '';
   return '<div class="entry-actions">'
-    +'<button class="entry-action-btn" onclick="openEditTimeSheet(\''+note.db_id+'\',\''+note.date+'\')">Zeitpunkt ändern</button>'
-    +'<button class="entry-action-btn danger" onclick="deleteJournalEntry(\''+note.db_id+'\')">Löschen</button>'
+    +'<button class="btn-pill" onclick="openEditTimeSheet(\''+note.db_id+'\',\''+note.date+'\')">Zeitpunkt ändern</button>'
+    +'<button class="btn-pill red" onclick="deleteJournalEntry(\''+note.db_id+'\')">Löschen</button>'
     +'</div>';
 }
 let _editTimeEntryId=null;
