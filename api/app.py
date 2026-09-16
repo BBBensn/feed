@@ -480,11 +480,105 @@ def fetch_shift_events(limit=100, include_details=True):
     return events
 
 
+# ── Health integration ───────────────────────────────────────────────────────
+# health.bensn.me's tables live in the same Postgres DB feed-api already connects to
+# (for the `shares` table) — reading them directly avoids adding a second cross-service
+# HTTP-call pattern alongside the existing worktracker one.
+
+def fetch_medication_events(limit=100):
+    """Fetch recent medication intakes and convert to feed events."""
+    if not DB_URL:
+        return []
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT l.id, l.taken_at, m.name AS medication_name, m.dose_mg
+            FROM health_medication_logs l
+            JOIN health_medications m ON m.id = l.medication_id
+            WHERE l.deleted = FALSE
+            ORDER BY l.taken_at DESC LIMIT %s
+        ''', (limit,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception:
+        return []
+
+    return [{
+        'id': f'medication-{r["id"]}',
+        'type': 'medication_taken',
+        'date': utc_to_vienna_naive(r['taken_at'].isoformat()),
+        'medication_name': r['medication_name'],
+        'dose_mg': float(r['dose_mg']) if r['dose_mg'] is not None else None,
+    } for r in rows]
+
+
+def fetch_bp_events(limit=100):
+    """Fetch recent blood pressure readings and convert to feed events."""
+    if not DB_URL:
+        return []
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT id, measured_at, systolic, diastolic, pulse
+            FROM health_bp_logs WHERE deleted = FALSE
+            ORDER BY measured_at DESC LIMIT %s
+        ''', (limit,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception:
+        return []
+
+    return [{
+        'id': f'bp-{r["id"]}',
+        'type': 'bp_reading',
+        'date': utc_to_vienna_naive(r['measured_at'].isoformat()),
+        'systolic': r['systolic'],
+        'diastolic': r['diastolic'],
+        'pulse': r['pulse'],
+    } for r in rows]
+
+
+def fetch_meal_events(limit=100):
+    """Fetch recent meals and convert to feed events."""
+    if not DB_URL:
+        return []
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT id, eaten_at, label, description
+            FROM health_meals WHERE deleted = FALSE
+            ORDER BY eaten_at DESC LIMIT %s
+        ''', (limit,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception:
+        return []
+
+    return [{
+        'id': f'meal-{r["id"]}',
+        'type': 'meal_logged',
+        'date': utc_to_vienna_naive(r['eaten_at'].isoformat()),
+        'label': r['label'],
+        'description': r['description'],
+    } for r in rows]
+
+
 @app.route("/api/feed/combined")
 def feed_combined():
-    """Private combined feed: journal notes + worktracker events."""
+    """Private combined feed: journal notes + worktracker + health events.
+    Health events are intentionally NOT included in feed_combined_shared() below —
+    medical data has no business appearing on a link shared with other people."""
     notes = load_all_notes()
     events = fetch_shift_events(limit=100, include_details=True)
+    events += fetch_medication_events(limit=100)
+    events += fetch_bp_events(limit=100)
+    events += fetch_meal_events(limit=100)
     combined = notes + events
     combined.sort(key=lambda x: x.get('date') or '', reverse=True)
     try:

@@ -9,7 +9,7 @@ Ablageort: `~/Documents/Coding/bensn-hub/feed/CLAUDE.md`
 
 - **Name:** Bensn-Feed
 - **Domain:** feed.bensn.me
-- **Version:** v2.0.2 (Frontend) / app.py-Stand aus v1.7.7 (Backend)
+- **Version:** v2.0.3 (Frontend + Backend, Health-Integration)
 - **Status:** active — wird gerade grundlegend umgebaut (siehe Roadmap: Obsidian-Ablösung)
 - **Stack:** Vanilla JS + Flask (Python), bensn.me Design System (`/shared/bensn.css`+`bensn.js`)
 
@@ -154,9 +154,25 @@ Sync-Mechanismus komplett entfernt.
 | arbeit | Pine Teal | `#065143` | ❌ |
 | idea / ideas | Royal Violet | `#6622cc` | ❌ |
 | project_log | Dusk Blue | `#1d4e89` | ❌ |
+| medication_taken / bp_reading / meal_logged | Teal | `#22d3d3` | ❌ (nie geshared, siehe unten) |
 | UI-Akzent | Fresh Sky | `#00a6ed` | — |
 
 Sharing-Filterung: `share_config.json` auf Server + `private: true` im Note-Frontmatter.
+Health-Events sind eine Ausnahme davon — die werden in `feed_combined_shared()` und
+`share_feed()` (dem `/api/share/<token>`-Endpoint) bewusst nie eingemischt, unabhängig von
+`share_config.json`. Medizinische Daten haben auf einem Link, den man mit anderen teilt,
+nichts verloren.
+
+---
+
+## Health-Integration (`health.bensn.me`)
+
+Seit v2.0.3 (2026-09-16): `fetch_medication_events()`, `fetch_bp_events()`,
+`fetch_meal_events()` in `api/app.py` lesen `health_medication_logs`/`health_bp_logs`/
+`health_meals` **direkt aus Postgres** (nicht per internem HTTP-Call wie beim Worktracker) —
+feed-api hat über die geteilte DB-Verbindung fürs Sharing-Feature ohnehin schon Zugriff,
+ein zweites HTTP-Client-Pattern wäre unnötig gewesen. Nur in `feed_combined()` gemergt
+(privat), nicht in den beiden Shared-Varianten.
 
 ---
 
@@ -183,7 +199,7 @@ Sharing-Filterung: `share_config.json` auf Server + `private: true` im Note-Fron
 | v1.6.0–v1.6.4 | Frontend-Iterationen | ✅ deployed |
 | v1.7.0–v1.7.9 | Sharing-System, Migration auf bensn-auth Cookie | ✅ deployed |
 | v2.0.0–v2.0.2 | Login-Overlay entfernt, Wikilink-Stats-Drawer | ✅ deployed |
-| — | Health → Feed Integration (Medikamente/BP/Mahlzeiten als Timeline-Events) | ⬜ geplant |
+| v2.0.3 | Health → Feed Integration (Medikamente/BP/Mahlzeiten als Timeline-Events) | ✅ deployed (2026-09-16) |
 | — | `journal_entries`-Schema + natives Mood-Compose + Mood-Migration | ⬜ geplant |
 | — | Compose-UI für restliche 8 Journal-Typen | ⬜ geplant |
 | — | Vollständige Historien-Migration + Obsidian-Decommission | ⬜ geplant |

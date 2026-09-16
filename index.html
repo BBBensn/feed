@@ -28,6 +28,7 @@
   --c-idea:      #6622cc;
   --c-arbeit:    #065143;
   --c-schicht:   #3BC14A;
+  --c-health:    #22d3d3;
   --c-ui:        #00a6ed;
 }
 
@@ -629,6 +630,12 @@ footer {
 .note-card.type-work_end::before { background: var(--c-schicht); }
 .badge-work_start,.badge-work_pause,.badge-work_end { color: var(--c-schicht); }
 .filter-btn[data-type="schicht"].active { border-color:var(--c-schicht); color:var(--c-schicht); background:rgba(59,193,74,.08); }
+
+.note-card.type-medication_taken::before,
+.note-card.type-bp_reading::before,
+.note-card.type-meal_logged::before { background: var(--c-health); }
+.badge-medication_taken,.badge-bp_reading,.badge-meal_logged { color: var(--c-health); }
+.filter-btn[data-type="health"].active { border-color:var(--c-health); color:var(--c-health); background:rgba(34,211,211,.08); }
 .work-card-headline { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; color: var(--text); letter-spacing: -.01em; margin-bottom: .25rem; }
 .work-card-body { font-family: 'DM Mono', monospace; font-size: 11.5px; color: var(--muted); line-height: 1.8; margin-top: .4rem; }
 .work-stat-row { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: .5rem; }
@@ -675,6 +682,7 @@ footer {
           <button class="filter-btn active" data-type="idea">Ideas</button>
           <button class="filter-btn active" data-type="arbeit">Work</button>
           <button class="filter-btn active" data-type="schicht">Schichten</button>
+          <button class="filter-btn active" data-type="health">Health</button>
         </div>
       </div>
       <div id="searchWrap" class="tb-hidden">
@@ -836,7 +844,8 @@ function typeColor(type){
     reflexion:'#ffb400',reflexionen:'#ffb400',symptome:'#f96f5d',symptom:'#f96f5d',
     therapie:'#9c3848',arbeit:'#065143',project_log:'#1d4e89',projectlog:'#1d4e89',
     idea:'#6622cc',ideas:'#6622cc',
-    work_start:'#3BC14A',work_pause:'#3BC14A',work_end:'#3BC14A'};
+    work_start:'#3BC14A',work_pause:'#3BC14A',work_end:'#3BC14A',
+    medication_taken:'#22d3d3',bp_reading:'#22d3d3',meal_logged:'#22d3d3'};
   return m[(type||'').toLowerCase()]||'var(--muted)';
 }
 /* ── oEmbed: Spotify + YouTube ── */
@@ -998,7 +1007,8 @@ function typeLabel(type){
   const map={diary:'Diary',mood:'Mood',fits:'Fits',fit:'Fits',reflexion:'Reflection',reflexionen:'Reflection',
     symptome:'Symptoms',symptom:'Symptoms',therapie:'Therapy',arbeit:'Work',
     project_log:'Project',projectlog:'Project',idea:'Idea',ideas:'Idea',
-    work_start:'Dienstbeginn',work_pause:'Pause',work_end:'Dienstende'};
+    work_start:'Dienstbeginn',work_pause:'Pause',work_end:'Dienstende',
+    medication_taken:'Medikament',bp_reading:'Blutdruck',meal_logged:'Mahlzeit'};
   return map[(type||'').toLowerCase()]||type||'Note';
 }
 function badgeClass(type){return 'badge-'+(type||'').toLowerCase().replace(/\s/g,'_');}
@@ -1079,9 +1089,31 @@ function renderWorkEvent(note,idx){
   return el;
 }
 
+function renderHealthEvent(note,idx){
+  const type=note.type, id='note-'+idx;
+  const el=document.createElement('div');
+  el.id=id; el.className='note-card type-'+type; el.style.animationDelay=(idx%PAGE_SIZE*35)+'ms';
+  const metaHtml='<div class="note-meta"><span class="note-type-badge badge-'+type+'">'+typeLabel(type)+'</span><span class="note-date">'+fmtTime(note.date)+'</span></div>';
+  let body='';
+  if(type==='medication_taken'){
+    body='<div class="work-card-headline">'+escHtml(note.medication_name)+(note.dose_mg?' · '+note.dose_mg+'mg':'')+'</div>';
+  } else if(type==='bp_reading'){
+    body='<div class="work-stat-row">';
+    body+='<div class="work-stat"><div class="work-stat-val">'+note.systolic+'/'+note.diastolic+'</div><div class="work-stat-label">mmHg</div></div>';
+    if(note.pulse) body+='<div class="work-stat"><div class="work-stat-val">'+note.pulse+'</div><div class="work-stat-label">Puls</div></div>';
+    body+='</div>';
+  } else if(type==='meal_logged'){
+    body='<div class="work-card-headline">'+escHtml(note.label||'Mahlzeit')+'</div>';
+    if(note.description) body+='<div class="work-card-body">'+escHtml(note.description)+'</div>';
+  }
+  el.innerHTML=metaHtml+body;
+  return el;
+}
+
 function renderNote(note,idx){
   const type=(note.type||'').toLowerCase();
   if(type==='work_start'||type==='work_pause'||type==='work_end') return renderWorkEvent(note,idx);
+  if(type==='medication_taken'||type==='bp_reading'||type==='meal_logged') return renderHealthEvent(note,idx);
   const id='note-'+idx,raw=note.content||'',ct=cleanTitle(note.title);
   const el=document.createElement('div');
   el.id=id; el.className='note-card type-'+type; el.style.animationDelay=(idx%PAGE_SIZE*35)+'ms';
@@ -1144,6 +1176,7 @@ function typeMatches(noteType,filterType){
   if(filterType==='projekt') return t==='project_log'||t==='projectlog';
   if(filterType==='idea') return t==='idea'||t==='ideas';
   if(filterType==='schicht') return t==='work_start'||t==='work_pause'||t==='work_end';
+  if(filterType==='health') return t==='medication_taken'||t==='bp_reading'||t==='meal_logged';
   return t===filterType;
 }
 function getFilteredNotes(){
