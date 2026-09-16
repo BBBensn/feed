@@ -406,16 +406,55 @@ def fetch_meal_events(limit=100):
     } for r in rows]
 
 
+# ── Tracking integration ─────────────────────────────────────────────────────
+# tracking.bensn.me's tables live in the same Postgres DB, same pattern as health above.
+# Only entry_type='zaehler' (counter/consumption events, e.g. Red Bull, Ofen) is surfaced —
+# 'auffuellung'/'entnahme'/'delta' are vorrat/stock bookkeeping, not a "moment" worth
+# showing in a life feed (see tracking.bensn.me v1.6.0's habit-tracker-focus redesign).
+
+def fetch_tracking_events(limit=500):
+    """Fetch recent consumption entries from tracking.bensn.me and convert to feed events."""
+    if not DB_URL:
+        return []
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT id, timestamp, category, name, amount, unit, note
+            FROM tracking_entries
+            WHERE entry_type = 'zaehler' AND (deleted IS NULL OR deleted = FALSE)
+            ORDER BY timestamp DESC LIMIT %s
+        ''', (limit,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception:
+        return []
+
+    return [{
+        'id': f'tracking-{r["id"]}',
+        'type': 'tracking_logged',
+        'date': utc_to_vienna_naive(r['timestamp'].isoformat()),
+        'category': r['category'],
+        'name': r['name'],
+        'amount': float(r['amount']) if r['amount'] is not None else None,
+        'unit': r['unit'],
+        'note': r['note'],
+    } for r in rows]
+
+
 @app.route("/api/feed/combined")
 def feed_combined():
     """Private combined feed: Obsidian notes + native journal entries + worktracker +
-    health events. Health events are intentionally NOT included in feed_combined_shared()
-    below — medical data has no business appearing on a link shared with other people."""
+    health + tracking events. Health/tracking events are intentionally NOT included in
+    feed_combined_shared() below — personal medical/consumption data has no business
+    appearing on a link shared with other people."""
     notes = fetch_journal_events(limit=1000)
     events = fetch_shift_events(limit=500, include_details=True)
     events += fetch_medication_events(limit=500)
     events += fetch_bp_events(limit=500)
     events += fetch_meal_events(limit=500)
+    events += fetch_tracking_events(limit=500)
     combined = notes + events
     combined.sort(key=lambda x: x.get('date') or '', reverse=True)
     try:

@@ -29,6 +29,7 @@
   --c-arbeit:    #065143;
   --c-schicht:   #3BC14A;
   --c-health:    #22d3d3;
+  --c-tracking:  #a3e635;
   --c-ui:        #00a6ed;
 }
 
@@ -643,6 +644,10 @@ footer {
 .note-card.type-meal_logged::before { background: var(--c-health); }
 .badge-medication_taken,.badge-bp_reading,.badge-meal_logged { color: var(--c-health); }
 .filter-btn[data-type="health"].active { border-color:var(--c-health); color:var(--c-health); background:rgba(34,211,211,.08); }
+
+.note-card.type-tracking_logged::before { background: var(--c-tracking); }
+.badge-tracking_logged { color: var(--c-tracking); }
+.filter-btn[data-type="tracking"].active { border-color:var(--c-tracking); color:var(--c-tracking); background:rgba(163,230,53,.08); }
 .work-card-headline { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; color: var(--text); letter-spacing: -.01em; margin-bottom: .25rem; }
 .work-card-body { font-family: 'DM Mono', monospace; font-size: 11.5px; color: var(--muted); line-height: 1.8; margin-top: .4rem; }
 .work-stat-row { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: .5rem; }
@@ -714,6 +719,7 @@ footer {
           <button class="filter-btn active" data-type="arbeit">Work</button>
           <button class="filter-btn active" data-type="schicht">Schichten</button>
           <button class="filter-btn active" data-type="health">Health</button>
+          <button class="filter-btn active" data-type="tracking">Tracking</button>
         </div>
       </div>
       <div id="searchWrap" class="tb-hidden">
@@ -952,7 +958,8 @@ function typeColor(type){
     therapie:'#9c3848',arbeit:'#065143',project_log:'#1d4e89',projectlog:'#1d4e89',
     idea:'#6622cc',ideas:'#6622cc',
     work_start:'#3BC14A',work_pause:'#3BC14A',work_end:'#3BC14A',
-    medication_taken:'#22d3d3',bp_reading:'#22d3d3',meal_logged:'#22d3d3'};
+    medication_taken:'#22d3d3',bp_reading:'#22d3d3',meal_logged:'#22d3d3',
+    tracking_logged:'#a3e635'};
   return m[(type||'').toLowerCase()]||'var(--muted)';
 }
 /* ── oEmbed: Spotify + YouTube ── */
@@ -1115,7 +1122,8 @@ function typeLabel(type){
     symptome:'Symptoms',symptom:'Symptoms',therapie:'Therapy',arbeit:'Work',
     project_log:'Project',projectlog:'Project',idea:'Idea',ideas:'Idea',
     work_start:'Dienstbeginn',work_pause:'Pause',work_end:'Dienstende',
-    medication_taken:'Medikament',bp_reading:'Blutdruck',meal_logged:'Mahlzeit'};
+    medication_taken:'Medikament',bp_reading:'Blutdruck',meal_logged:'Mahlzeit',
+    tracking_logged:'Tracking'};
   return map[(type||'').toLowerCase()]||type||'Note';
 }
 function badgeClass(type){return 'badge-'+(type||'').toLowerCase().replace(/\s/g,'_');}
@@ -1212,6 +1220,9 @@ function renderHealthEvent(note,idx){
   } else if(type==='meal_logged'){
     body='<div class="work-card-headline">'+escHtml(note.label||'Mahlzeit')+'</div>';
     if(note.description) body+='<div class="work-card-body">'+escHtml(note.description)+'</div>';
+  } else if(type==='tracking_logged'){
+    body='<div class="work-card-headline">'+escHtml(note.name)+(note.amount!=null?' · '+note.amount+(note.unit?' '+escHtml(note.unit):''):'')+'</div>';
+    if(note.note) body+='<div class="work-card-body">'+escHtml(note.note)+'</div>';
   }
   el.innerHTML=metaHtml+body;
   return el;
@@ -1220,7 +1231,7 @@ function renderHealthEvent(note,idx){
 function renderNote(note,idx){
   const type=(note.type||'').toLowerCase();
   if(type==='work_start'||type==='work_pause'||type==='work_end') return renderWorkEvent(note,idx);
-  if(type==='medication_taken'||type==='bp_reading'||type==='meal_logged') return renderHealthEvent(note,idx);
+  if(type==='medication_taken'||type==='bp_reading'||type==='meal_logged'||type==='tracking_logged') return renderHealthEvent(note,idx);
   const id='note-'+idx,raw=note.content||'',ct=cleanTitle(note.title);
   const el=document.createElement('div');
   el.id=id; el.className='note-card type-'+type; el.style.animationDelay=(idx%PAGE_SIZE*35)+'ms';
@@ -1354,6 +1365,7 @@ function typeMatches(noteType,filterType){
   if(filterType==='idea') return t==='idea'||t==='ideas';
   if(filterType==='schicht') return t==='work_start'||t==='work_pause'||t==='work_end';
   if(filterType==='health') return t==='medication_taken'||t==='bp_reading'||t==='meal_logged';
+  if(filterType==='tracking') return t==='tracking_logged';
   return t===filterType;
 }
 function getFilteredNotes(){
