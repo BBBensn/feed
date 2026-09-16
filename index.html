@@ -372,12 +372,7 @@ mark {
 .entry-tag { font-family: 'DM Mono', monospace; font-size: 10px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); color: var(--muted); }
 .entry-actions { display: flex; gap: .5rem; margin-top: .6rem; }
 
-/* ── Shared small-action button (matches worktracker's Bearbeiten/+Pause/Löschen buttons —
-   same class as health.bensn.me, kept identical across services on purpose) ── */
-.btn-pill { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; background: none; border: 1px solid var(--border); color: var(--muted); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
-.btn-pill:hover { border-color: var(--border-hover); color: var(--text); }
-.btn-pill.green { border-color: rgba(74,222,128,.3); color: var(--green); }
-.btn-pill.red { border-color: rgba(255,0,81,.3); color: var(--accent-red); }
+/* .btn-pill now lives in the shared /shared/bensn.css — one definition for all apps */
 
 /* ── Photo Grid (Telegram-style) ── */
 .photo-grid {
@@ -675,8 +670,7 @@ footer {
 .note-input { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; outline: none; margin-bottom: 1rem; resize: vertical; min-height: 60px; }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: .6rem 0; margin-bottom: 1rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); font-family: 'DM Mono', monospace; font-size: 12px; }
 .sheet-btns { display: flex; gap: .5rem; }
-.btn-save { flex: 1; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: .06em; background: var(--green); color: #0a0a0b; border: none; border-radius: 8px; padding: 11px; cursor: pointer; }
-.btn-cancel { font-family: 'DM Mono', monospace; font-size: 11px; background: none; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 11px 16px; cursor: pointer; }
+/* .btn-save / .btn-cancel now live in the shared /shared/bensn.css */
 
 /* ── Mood card visualization ── */
 .mood-bar-track { height: 6px; border-radius: 3px; background: rgba(255,255,255,.07); margin: .4rem 0 .6rem; position: relative; overflow: hidden; }
