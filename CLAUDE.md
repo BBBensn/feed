@@ -9,7 +9,7 @@ Ablageort: `~/Documents/Coding/bensn-hub/feed/CLAUDE.md`
 
 - **Name:** Bensn-Feed
 - **Domain:** feed.bensn.me
-- **Version:** v2.6.0 (Tracking-Integration: Konsum-Events im Feed)
+- **Version:** v2.7.0 (Medikamenten-Anmerkungen/Gewicht/Schlaf im Feed + Event-Registry-Refactor)
 - **Status:** active — Obsidian-Ablösung vollständig abgeschlossen (Compose-UI für alle 9
   Typen, komplette Historie migriert, Git-Sync abgeschaltet)
 - **Stack:** Vanilla JS + Flask (Python) + PostgreSQL, bensn.me Design System (`/shared/bensn.css`+`bensn.js`)
@@ -202,8 +202,16 @@ Seit v2.0.3 (2026-09-16): `fetch_medication_events()`, `fetch_bp_events()`,
 `fetch_meal_events()` in `api/app.py` lesen `health_medication_logs`/`health_bp_logs`/
 `health_meals` **direkt aus Postgres** (nicht per internem HTTP-Call wie beim Worktracker) —
 feed-api hat über die geteilte DB-Verbindung fürs Sharing-Feature ohnehin schon Zugriff,
-ein zweites HTTP-Client-Pattern wäre unnötig gewesen. Nur in `feed_combined()` gemergt
-(privat), nicht in den beiden Shared-Varianten.
+ein zweites HTTP-Client-Pattern wäre unnötig gewesen.
+
+Seit v2.7.0 (2026-09-17) zusätzlich: `fetch_medication_note_events()` (zeitgestempelte
+Wirkungs-/Nebenwirkungsbeobachtungen aus `health_medication_effect_notes`, JOIN über
+`health_medication_logs`→`health_medications` für den Medikamentennamen) und
+`fetch_weight_events()` (`health_weight_logs`). Beide fehlten bis dahin komplett im Feed,
+obwohl "wie hat das Medikament gewirkt" genau die Anmerkungen braucht, nicht nur die
+Einnahme selbst.
+
+Alles nur in `feed_combined()` gemergt (privat), nicht in den beiden Shared-Varianten.
 
 ---
 
@@ -214,8 +222,47 @@ direkt aus Postgres, gleiches Muster wie die Health-Integration oben. Nur
 `entry_type = 'zaehler'` wird als Feed-Event gezeigt (Konsum-/Zähler-Momente wie Red Bull,
 Zigarette, Ofen) — `auffuellung`/`entnahme`/`delta` (Vorrat-Buchhaltung, seit tracking
 v1.6.0 ohnehin nur noch Hintergrundfunktion) sind keine "Momente", die im Feed auftauchen
-sollen. Wie bei Health nur in `feed_combined()` gemergt (privat), nicht in den
-Shared-Varianten — Konsumdaten sind genauso privat wie Medikamente/Blutdruck.
+sollen. Nur in `feed_combined()` gemergt (privat) — Konsumdaten sind genauso privat wie
+Medikamente/Blutdruck.
+
+---
+
+## Oura-Integration (über `health.bensn.me`)
+
+Seit v2.7.0 (2026-09-17): `fetch_sleep_events()` liest `health_oura_sleep`
+(Event-Zeitpunkt = `bedtime_end`/Aufwachzeit, nicht `bedtime_start` — man reflektiert über
+eine Nacht am Morgen danach, nicht während sie noch läuft). `fetch_heartrate_summary_events()`
+liest `health_oura_heartrate` **aggregiert auf einen Wert pro Tag** (Ruhepuls + Min/Max) —
+die rohen ~2000 Samples/Tag sind ein kontinuierlicher Datenstrom, kein "Moment", und würden
+den Feed fluten. Der Tages-Wert bekommt einen synthetischen Mittags-Zeitstempel
+(`YYYY-MM-DDT12:00:00`), da er sich auf den ganzen Tag bezieht, nicht auf einen Augenblick.
+Nur in `feed_combined()` gemergt (privat).
+
+---
+
+## Event-Typ-Registry (Frontend, seit v2.7.0)
+
+`SERVICE_EVENTS` in `index.html` ist die einzige Quelle für Farbe/Label/Filter-Gruppe/Render-
+Body jedes "von einem anderen Service geschriebenen" Event-Typs (aktuell: `medication_taken`,
+`medication_note`, `bp_reading`, `meal_logged`, `weight_logged`, `tracking_logged`,
+`sleep_logged`, `heartrate_summary`). `typeColor()`, `typeLabel()`, `renderNote()`s Dispatch
+und `typeMatches()` schlagen alle zuerst in dieser Registry nach, bevor sie auf die
+alten, type-spezifischen Maps zurückfallen (die nur noch native Journal-Typen und
+`work_start`/`work_pause`/`work_end` enthalten — die rendern über eigene, reichhaltigere
+Pfade und passen nicht ins generische "Badge + einfacher Body"-Schema).
+
+**Warum:** Vor diesem Refactor musste jeder neue Event-Typ an 8 Stellen einzeln eingetragen
+werden (Backend-Fetch, `feed_combined()`-Wiring, CSS-Farbvariable, Filter-Button-HTML,
+`typeColor`-Map, `typeLabel`-Map, Render-Dispatch, Filter-Matcher) — genau deshalb fehlten
+Medikamenten-Anmerkungen/Gewicht/Schlaf so lange im Feed. Jetzt: ein neuer Typ innerhalb
+einer bestehenden Gruppe (health/tracking/oura) = **eine** `SERVICE_EVENTS`-Zeile, Farben und
+CSS werden zur Laufzeit aus der Registry generiert (`injectServiceEventStyles()`). Nur eine
+komplett neue GRUPPE (z.B. künftig `location`) braucht noch einen manuellen Filter-Button
+plus eine `--c-*`-Farbvariable — das ist der bewusst verbleibende, seltene Rest-Aufwand.
+
+Backend-seitig existiert das Äquivalent als `PRIVATE_EVENT_FETCHERS`-Liste in `api/app.py` —
+eine neue Quelle ist `fetch_X_events(limit)` schreiben + an die Liste anhängen, kein Suchen
+mehr nach der `feed_combined()`-Stelle, die geändert werden muss.
 
 ---
 
@@ -260,6 +307,7 @@ Shared-Varianten — Konsumdaten sind genauso privat wie Medikamente/Blutdruck.
 | v2.5.0 | `.entry-action-btn`-Text-Links durch `.btn-pill` ersetzt (geborderte, großgeschriebene DM-Mono-Buttons, 1:1 aus `worktracker`s Bearbeiten/+Pause/Löschen übernommen) — Teil einer service-übergreifenden Design-Angleichung, dieselbe Klasse existiert jetzt identisch in `health.bensn.me` | ✅ deployed (2026-09-16) |
 | v2.5.1 | `.btn-pill`/`.btn-save`/`.btn-cancel` aus lokalem CSS entfernt, kommen jetzt zentral aus `bensn-meta/shared/bensn.css` — keine visuelle Änderung, reine Konsolidierung | ✅ deployed (2026-09-16) |
 | v2.6.0 | Tracking-Integration: `tracking_entries` (nur `entry_type='zaehler'`, also Konsum-Momente wie Red Bull/Zigarette/Ofen) erscheinen jetzt im privaten Feed, eigener `tracking`-Filter-Chip + eigene Akzentfarbe (`--c-tracking`, Lime — passend zu tracking.bensn.mes Landing-Page-Farbe) | ✅ deployed (2026-09-17) |
+| v2.7.0 | Medikamenten-Anmerkungen, Gewicht und Oura-Schlaf (+ Oura-Herzfrequenz als Tages-Zusammenfassung) erscheinen jetzt im Feed — die größte fehlende Lücke für ein "vollständiges Alltagsbild". Gleichzeitig Event-Typ-Registry eingeführt (`SERVICE_EVENTS` im Frontend, `PRIVATE_EVENT_FETCHERS` im Backend), damit ein neuer Typ nicht mehr an 8 verstreuten Stellen einzeln nachgezogen werden muss (genau das war der Grund, warum diese drei Quellen so lange fehlten) | ✅ deployed (2026-09-17) |
 
 Details zur vollständigen Versionshistorie: `docs/changelogs/CHANGELOG.md`.
 

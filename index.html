@@ -30,6 +30,7 @@
   --c-schicht:   #3BC14A;
   --c-health:    #22d3d3;
   --c-tracking:  #a3e635;
+  --c-oura:      #00a6fb;
   --c-ui:        #00a6ed;
 }
 
@@ -639,15 +640,14 @@ footer {
 .badge-work_start,.badge-work_pause,.badge-work_end { color: var(--c-schicht); }
 .filter-btn[data-type="schicht"].active { border-color:var(--c-schicht); color:var(--c-schicht); background:rgba(59,193,74,.08); }
 
-.note-card.type-medication_taken::before,
-.note-card.type-bp_reading::before,
-.note-card.type-meal_logged::before { background: var(--c-health); }
-.badge-medication_taken,.badge-bp_reading,.badge-meal_logged { color: var(--c-health); }
+/* Per-type note-card/badge colors for medication_taken/medication_note/bp_reading/
+   meal_logged/weight_logged/tracking_logged/sleep_logged/heartrate_summary are generated
+   at runtime from the SERVICE_EVENTS registry (see injectServiceEventStyles()) — adding a
+   new type there needs no CSS edit here. Only the filter-chip active-states below stay
+   static, since those are keyed by GROUP (one button per group), not per type. */
 .filter-btn[data-type="health"].active { border-color:var(--c-health); color:var(--c-health); background:rgba(34,211,211,.08); }
-
-.note-card.type-tracking_logged::before { background: var(--c-tracking); }
-.badge-tracking_logged { color: var(--c-tracking); }
 .filter-btn[data-type="tracking"].active { border-color:var(--c-tracking); color:var(--c-tracking); background:rgba(163,230,53,.08); }
+.filter-btn[data-type="oura"].active { border-color:var(--c-oura); color:var(--c-oura); background:rgba(0,166,251,.08); }
 .work-card-headline { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; color: var(--text); letter-spacing: -.01em; margin-bottom: .25rem; }
 .work-card-body { font-family: 'DM Mono', monospace; font-size: 11.5px; color: var(--muted); line-height: 1.8; margin-top: .4rem; }
 .work-stat-row { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: .5rem; }
@@ -720,6 +720,7 @@ footer {
           <button class="filter-btn active" data-type="schicht">Schichten</button>
           <button class="filter-btn active" data-type="health">Health</button>
           <button class="filter-btn active" data-type="tracking">Tracking</button>
+          <button class="filter-btn active" data-type="oura">Oura</button>
         </div>
       </div>
       <div id="searchWrap" class="tb-hidden">
@@ -952,15 +953,62 @@ function renderTimeline(content){
 /* ── Helpers ── */
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function normalize(s){return(s||'').toLowerCase().replace(/[-_\s]+/g,' ').replace(/[^a-z0-9äöüß ]/g,'').trim();}
+
+/* ── Service-integrated event types (registry) ──────────────────────────────
+   Single source of truth for every "external service wrote this" event type: color,
+   label, filter group and body markup. Adding a new source (another health metric,
+   another Oura field, ...) means ONE new entry here — colors, the note-card accent,
+   the badge, filter matching and rendering all follow automatically. Native journal
+   types (diary/mood/...) and work_start/pause/end are NOT in here on purpose: those
+   render through their own, richer paths (mood bars, photo grids, shift stats) that
+   don't fit a generic "badge + simple body" template. */
+function segHeadline(html){ return '<div class="work-card-headline">'+html+'</div>'; }
+function segBody(text){ return '<div class="work-card-body">'+escHtml(text)+'</div>'; }
+const SERVICE_EVENTS = {
+  medication_taken: { label:'Medikament', color:'#22d3d3', group:'health',
+    body:n=>segHeadline(escHtml(n.medication_name)+(n.dose_mg?' · '+n.dose_mg+'mg':'')) },
+  medication_note: { label:'Wirkung', color:'#22d3d3', group:'health',
+    body:n=>segHeadline(escHtml(n.medication_name))
+      +((n.effects&&n.effects.length)?segBody(n.effects.join(' · ')):'')
+      +(n.note?segBody(n.note):'') },
+  bp_reading: { label:'Blutdruck', color:'#22d3d3', group:'health',
+    body:n=>{
+      let h='<div class="work-stat-row"><div class="work-stat"><div class="work-stat-val">'+n.systolic+'/'+n.diastolic+'</div><div class="work-stat-label">mmHg</div></div>';
+      if(n.pulse) h+='<div class="work-stat"><div class="work-stat-val">'+n.pulse+'</div><div class="work-stat-label">Puls</div></div>';
+      return h+'</div>';
+    } },
+  meal_logged: { label:'Mahlzeit', color:'#22d3d3', group:'health',
+    body:n=>segHeadline(escHtml(n.label||'Mahlzeit'))+(n.description?segBody(n.description):'') },
+  weight_logged: { label:'Gewicht', color:'#22d3d3', group:'health',
+    body:n=>segHeadline(n.weight_kg+' kg') },
+  tracking_logged: { label:'Tracking', color:'#a3e635', group:'tracking',
+    body:n=>segHeadline(escHtml(n.name)+(n.amount!=null?' · '+n.amount+(n.unit?' '+escHtml(n.unit):''):''))+(n.note?segBody(n.note):'') },
+  sleep_logged: { label:'Schlaf', color:'#00a6fb', group:'oura',
+    body:n=>segHeadline((n.total_sleep_duration?(n.total_sleep_duration/3600).toFixed(1)+'h':'–')+(n.sleep_score?' · Score '+n.sleep_score:'')+(n.efficiency?' · Effizienz '+n.efficiency+'%':'')) },
+  heartrate_summary: { label:'Herzfrequenz', color:'#00a6fb', group:'oura',
+    body:n=>segHeadline(n.resting_bpm?(n.resting_bpm+' bpm Ruhepuls'):(n.min_bpm+'–'+n.max_bpm+' bpm')) },
+};
+/* Generates the note-card accent + badge color CSS for every SERVICE_EVENTS entry —
+   the only per-type styling that used to need a hand-written CSS rule. */
+(function injectServiceEventStyles(){
+  const css=Object.entries(SERVICE_EVENTS).map(function(entry){
+    const type=entry[0], color=entry[1].color;
+    return '.note-card.type-'+type+'::before{background:'+color+'}.badge-'+type+'{color:'+color+'}';
+  }).join('');
+  const style=document.createElement('style');
+  style.textContent=css;
+  document.head.appendChild(style);
+})();
+
 function typeColor(type){
+  const t=(type||'').toLowerCase();
+  if(SERVICE_EVENTS[t]) return SERVICE_EVENTS[t].color;
   const m={diary:'#e5b181',mood:'#b8ebd0',fits:'#C9B6BE',fit:'#C9B6BE',
     reflexion:'#ffb400',reflexionen:'#ffb400',symptome:'#f96f5d',symptom:'#f96f5d',
     therapie:'#9c3848',arbeit:'#065143',project_log:'#1d4e89',projectlog:'#1d4e89',
     idea:'#6622cc',ideas:'#6622cc',
-    work_start:'#3BC14A',work_pause:'#3BC14A',work_end:'#3BC14A',
-    medication_taken:'#22d3d3',bp_reading:'#22d3d3',meal_logged:'#22d3d3',
-    tracking_logged:'#a3e635'};
-  return m[(type||'').toLowerCase()]||'var(--muted)';
+    work_start:'#3BC14A',work_pause:'#3BC14A',work_end:'#3BC14A'};
+  return m[t]||'var(--muted)';
 }
 /* ── oEmbed: Spotify + YouTube ── */
 
@@ -1118,13 +1166,13 @@ function dayKey(iso){
   return new Date(iso).toLocaleDateString('en-CA',{timeZone:'Europe/Vienna'});
 }
 function typeLabel(type){
+  const t=(type||'').toLowerCase();
+  if(SERVICE_EVENTS[t]) return SERVICE_EVENTS[t].label;
   const map={diary:'Diary',mood:'Mood',fits:'Fits',fit:'Fits',reflexion:'Reflection',reflexionen:'Reflection',
     symptome:'Symptoms',symptom:'Symptoms',therapie:'Therapy',arbeit:'Work',
     project_log:'Project',projectlog:'Project',idea:'Idea',ideas:'Idea',
-    work_start:'Dienstbeginn',work_pause:'Pause',work_end:'Dienstende',
-    medication_taken:'Medikament',bp_reading:'Blutdruck',meal_logged:'Mahlzeit',
-    tracking_logged:'Tracking'};
-  return map[(type||'').toLowerCase()]||type||'Note';
+    work_start:'Dienstbeginn',work_pause:'Pause',work_end:'Dienstende'};
+  return map[t]||type||'Note';
 }
 function badgeClass(type){return 'badge-'+(type||'').toLowerCase().replace(/\s/g,'_');}
 function processEmbeds(container){
@@ -1204,34 +1252,19 @@ function renderWorkEvent(note,idx){
   return el;
 }
 
-function renderHealthEvent(note,idx){
+function renderServiceEvent(note,idx){
   const type=note.type, id='note-'+idx;
   const el=document.createElement('div');
   el.id=id; el.className='note-card type-'+type; el.style.animationDelay=(idx%PAGE_SIZE*35)+'ms';
   const metaHtml='<div class="note-meta"><span class="note-type-badge badge-'+type+'">'+typeLabel(type)+'</span><span class="note-date">'+fmtTime(note.date)+'</span></div>';
-  let body='';
-  if(type==='medication_taken'){
-    body='<div class="work-card-headline">'+escHtml(note.medication_name)+(note.dose_mg?' · '+note.dose_mg+'mg':'')+'</div>';
-  } else if(type==='bp_reading'){
-    body='<div class="work-stat-row">';
-    body+='<div class="work-stat"><div class="work-stat-val">'+note.systolic+'/'+note.diastolic+'</div><div class="work-stat-label">mmHg</div></div>';
-    if(note.pulse) body+='<div class="work-stat"><div class="work-stat-val">'+note.pulse+'</div><div class="work-stat-label">Puls</div></div>';
-    body+='</div>';
-  } else if(type==='meal_logged'){
-    body='<div class="work-card-headline">'+escHtml(note.label||'Mahlzeit')+'</div>';
-    if(note.description) body+='<div class="work-card-body">'+escHtml(note.description)+'</div>';
-  } else if(type==='tracking_logged'){
-    body='<div class="work-card-headline">'+escHtml(note.name)+(note.amount!=null?' · '+note.amount+(note.unit?' '+escHtml(note.unit):''):'')+'</div>';
-    if(note.note) body+='<div class="work-card-body">'+escHtml(note.note)+'</div>';
-  }
-  el.innerHTML=metaHtml+body;
+  el.innerHTML=metaHtml+SERVICE_EVENTS[type].body(note);
   return el;
 }
 
 function renderNote(note,idx){
   const type=(note.type||'').toLowerCase();
   if(type==='work_start'||type==='work_pause'||type==='work_end') return renderWorkEvent(note,idx);
-  if(type==='medication_taken'||type==='bp_reading'||type==='meal_logged'||type==='tracking_logged') return renderHealthEvent(note,idx);
+  if(SERVICE_EVENTS[type]) return renderServiceEvent(note,idx);
   const id='note-'+idx,raw=note.content||'',ct=cleanTitle(note.title);
   const el=document.createElement('div');
   el.id=id; el.className='note-card type-'+type; el.style.animationDelay=(idx%PAGE_SIZE*35)+'ms';
@@ -1364,8 +1397,7 @@ function typeMatches(noteType,filterType){
   if(filterType==='projekt') return t==='project_log'||t==='projectlog';
   if(filterType==='idea') return t==='idea'||t==='ideas';
   if(filterType==='schicht') return t==='work_start'||t==='work_pause'||t==='work_end';
-  if(filterType==='health') return t==='medication_taken'||t==='bp_reading'||t==='meal_logged';
-  if(filterType==='tracking') return t==='tracking_logged';
+  if(SERVICE_EVENTS[t]) return SERVICE_EVENTS[t].group===filterType;
   return t===filterType;
 }
 function getFilteredNotes(){
