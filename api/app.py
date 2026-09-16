@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Bensn-Feed API — liest Obsidian .md Notes aus 01_Journal und gibt sie als JSON zurück."""
+"""Bensn-Feed API — kombinierte Timeline aus journal_entries (Postgres), Worktracker- und
+Health-Events. Journal-Einträge werden ausschließlich über /api/journal/* geschrieben; das
+frühere Obsidian-Vault-Sync (Git-Webhook + Cron) ist seit 2026-09-16 abgeschaltet, siehe
+CLAUDE.md."""
 
 import os
 import re
 import json
-import subprocess
 import hmac
-import hashlib
 import secrets
 from datetime import datetime
 from pathlib import Path
 from flask import Flask, jsonify, request
-import frontmatter
 from PIL import Image, ImageOps
 import io
 
@@ -29,13 +29,10 @@ def get_db():
     """Get a database connection. Caller is responsible for closing."""
     return psycopg2.connect(DB_URL, cursor_factory=psycopg2.extras.RealDictCursor)
 
-VAULT_PATH = Path("/var/www/feed/vault/01_Journal")
 UPLOAD_PATH = Path("/var/www/feed/public/uploads")
 UPLOAD_URL_BASE = "https://feed.bensn.me/uploads"
 SHARE_CONFIG_PATH = Path("/var/www/feed/share_config.json")
-WEBHOOK_SECRET = b'ac6872f11b498d88dfb8bb4eb76db74ad7427ad9151377b35aae54cf20ae368c'
 UPLOAD_API_KEY = '3dbdb54401dd731f5e454053cd64606f6978986a8312bdab991bf9264210d152'
-GIT_ENV = {**os.environ, 'GIT_SSH_COMMAND': 'ssh -i /root/.ssh/feed_deploy'}
 
 UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
 
@@ -70,12 +67,6 @@ def is_note_shared(note: dict, config: dict) -> bool:
         return True
     return False
 
-# ── Sync ──────────────────────────────────────────────────────────────────────
-
-def do_sync():
-    subprocess.run(['git', '-C', '/var/www/feed/vault', 'fetch', '--all'], env=GIT_ENV)
-    subprocess.run(['git', '-C', '/var/www/feed/vault', 'reset', '--hard', 'origin/main'])
-
 # ── Image processing ──────────────────────────────────────────────────────────
 
 def process_image(file_data, max_size=2048, quality=85):
@@ -94,146 +85,7 @@ def process_image(file_data, max_size=2048, quality=85):
     img.save(out, format='JPEG', quality=quality, optimize=True)
     return out.getvalue()
 
-# ── Note helpers ──────────────────────────────────────────────────────────────
-
-def parse_date(val):
-    if not val:
-        return None
-    if isinstance(val, datetime):
-        return val
-    s = str(val).strip()
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
-        try:
-            return datetime.strptime(s, fmt)
-        except ValueError:
-            continue
-    return None
-
-def date_from_filename(name):
-    m = re.match(r"(\d{4}-\d{2}-\d{2})-(\d{4})", name)
-    if m:
-        try:
-            return datetime.strptime(m.group(1) + " " + m.group(2)[:2] + ":" + m.group(2)[2:], "%Y-%m-%d %H:%M")
-        except ValueError:
-            pass
-    m = re.match(r"(\d{4}-\d{2}-\d{2})", name)
-    if m:
-        try:
-            return datetime.strptime(m.group(1), "%Y-%m-%d")
-        except ValueError:
-            pass
-    return None
-
-def extract_images(content):
-    images = []
-    for m in re.finditer(r"!\[([^\]]*)\]\(([^)]+)\)", content):
-        images.append({"alt": m.group(1), "url": m.group(2)})
-    return images
-
-def extract_media_links(content):
-    links = []
-    patterns = [
-        ("spotify", r"https://open\.spotify\.com/\S+"),
-        ("youtube", r"https://(?:www\.)?youtube\.com/watch\S+"),
-        ("youtube", r"https://youtu\.be/\S+"),
-    ]
-    for platform, pat in patterns:
-        for m in re.finditer(pat, content):
-            links.append({"platform": platform, "url": m.group(0)})
-    return links
-
-def load_note(path: Path, folder: str):
-    try:
-        post = frontmatter.load(str(path))
-    except Exception:
-        return None
-    meta = post.metadata
-    content = (post.content or "").strip()
-    note_type = str(meta.get("type", "")).lower() or folder.lower()
-    dt = parse_date(meta.get("date_created")) or date_from_filename(path.stem)
-    if not dt:
-        return None
-    title = re.sub(r"^\d{4}-\d{2}-\d{2}(-\d{4})?-?", "", path.stem).replace("-", " ").strip()
-    return {
-        "id": path.stem,
-        "type": note_type,
-        "folder": folder,
-        "title": title or None,
-        "date": dt.isoformat(),
-        "date_modified": str(meta.get("date_modified", "")),
-        "tags": meta.get("tags", []),
-        "content": content,
-        "images": extract_images(content),
-        "media_links": extract_media_links(content),
-        "meta": {k: str(v) for k, v in meta.items() if k not in ("date_created", "date_modified", "tags", "type")},
-        "path": str(path.relative_to(VAULT_PATH.parent.parent)),
-    }
-
-def load_all_notes():
-    notes = []
-    if not VAULT_PATH.exists():
-        return notes
-    for md_file in VAULT_PATH.rglob("*.md"):
-        if md_file.name.startswith("."):
-            continue
-        note = load_note(md_file, md_file.parent.name)
-        if note:
-            notes.append(note)
-    notes.sort(key=lambda n: n["date"], reverse=True)
-    return notes
-
 # ── Routes ────────────────────────────────────────────────────────────────────
-
-@app.route("/api/feed")
-def feed():
-    notes = load_all_notes()
-    type_filter = request.args.get("type", "").lower()
-    if type_filter:
-        notes = [n for n in notes if n["type"] == type_filter]
-    folder_filter = request.args.get("folder", "").lower()
-    if folder_filter:
-        notes = [n for n in notes if n["folder"].lower() == folder_filter]
-    try:
-        limit = int(request.args.get("limit", 100))
-    except ValueError:
-        limit = 100
-    return jsonify({"count": len(notes[:limit]), "notes": notes[:limit]})
-
-@app.route("/api/feed/shared")
-def feed_shared():
-    """Public shared feed — filtered by share_config.json + private frontmatter flag."""
-    config = load_share_config()
-    notes = load_all_notes()
-    shared = [n for n in notes if is_note_shared(n, config)]
-    try:
-        limit = int(request.args.get("limit", 500))
-    except ValueError:
-        limit = 500
-    return jsonify({"count": len(shared[:limit]), "notes": shared[:limit]})
-
-@app.route("/api/feed/stats")
-def stats():
-    notes = load_all_notes()
-    by_type, by_folder = {}, {}
-    for n in notes:
-        by_type[n["type"]] = by_type.get(n["type"], 0) + 1
-        by_folder[n["folder"]] = by_folder.get(n["folder"], 0) + 1
-    return jsonify({
-        "total": len(notes),
-        "by_type": by_type,
-        "by_folder": by_folder,
-        "oldest": notes[-1]["date"] if notes else None,
-        "newest": notes[0]["date"] if notes else None,
-    })
-
-@app.route("/api/feed/<note_id>")
-def single_note(note_id):
-    for md_file in VAULT_PATH.rglob("*.md"):
-        if md_file.stem == note_id:
-            note = load_note(md_file, md_file.parent.name)
-            if note:
-                return jsonify(note)
-    return jsonify({"error": "Note not found"}), 404
 
 @app.route("/api/share/config", methods=["GET"])
 def share_config_get():
@@ -298,24 +150,9 @@ def upload():
 
     return jsonify({"error": "no image data provided"}), 400
 
-@app.route("/api/webhook", methods=["POST"])
-def webhook_sync():
-    sig = request.headers.get("X-Hub-Signature-256", "")
-    body = request.get_data()
-    expected = "sha256=" + hmac.new(WEBHOOK_SECRET, body, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(sig, expected):
-        return jsonify({"error": "unauthorized"}), 401
-    do_sync()
-    return jsonify({"status": "synced"})
-
-@app.route("/api/sync", methods=["POST"])
-def manual_sync():
-    do_sync()
-    return jsonify({"status": "synced"})
-
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "vault": str(VAULT_PATH), "exists": VAULT_PATH.exists()})
+    return jsonify({"status": "ok", "db": bool(DB_URL)})
 
 import urllib.request as _urllib_req
 
@@ -574,7 +411,7 @@ def feed_combined():
     """Private combined feed: Obsidian notes + native journal entries + worktracker +
     health events. Health events are intentionally NOT included in feed_combined_shared()
     below — medical data has no business appearing on a link shared with other people."""
-    notes = load_all_notes() + fetch_journal_events(limit=200)
+    notes = fetch_journal_events(limit=1000)
     events = fetch_shift_events(limit=100, include_details=True)
     events += fetch_medication_events(limit=100)
     events += fetch_bp_events(limit=100)
@@ -592,7 +429,7 @@ def feed_combined():
 def feed_combined_shared():
     """Public combined feed: shared notes + worktracker events (no details)."""
     config = load_share_config()
-    notes = load_all_notes() + fetch_journal_events(limit=200)
+    notes = fetch_journal_events(limit=1000)
     shared_notes = [n for n in notes if is_note_shared(n, config)]
     events = fetch_shift_events(limit=100, include_details=False)
     combined = shared_notes + events
@@ -705,7 +542,7 @@ def share_feed(token):
 
     # Load all notes + work events
     config = load_share_config()
-    notes = load_all_notes() + fetch_journal_events(limit=200)
+    notes = fetch_journal_events(limit=1000)
     # Use share's allowed/blocked types to filter — if none set, use global shared_types
     if not share.get('allowed_types') and not share.get('blocked_types'):
         notes = [n for n in notes if is_note_shared(n, config)]
@@ -856,23 +693,6 @@ def delete_share(share_id):
         return jsonify({'error': str(e)}), 503
 
 
-@app.route('/api/wikilinks')
-def get_wikilinks():
-    """Admin: return all unique wikilinks from the vault for autocomplete."""
-    links = set()
-    if VAULT_PATH.exists():
-        for md_file in VAULT_PATH.rglob('*.md'):
-            try:
-                text = md_file.read_text(errors='ignore')
-                for m in re.finditer(r'\[\[([^\]]+)\]\]', text):
-                    link = m.group(1).split('|')[0].strip()
-                    if link:
-                        links.add(link)
-            except Exception:
-                pass
-    return jsonify(sorted(links))
-
-
 # ── Journal entries (native replacement for Obsidian-authored notes) ─────────────
 # Starts with 'mood' only (see CLAUDE.md) — the other 8 entry_type values are allowed by
 # the schema's CHECK constraint already, but this API doesn't discriminate by type; any
@@ -898,7 +718,7 @@ def journal_row_to_note(row):
         'date_modified': row['updated_at'].isoformat() if row.get('updated_at') else None,
         'tags': row.get('tags') or [],
         'content': row.get('body') or '',
-        'images': row.get('images') or [],
+        'images': [{'alt': '', 'url': u} for u in (row.get('images') or [])],
         'media_links': [],
         'meta': row.get('fields') or {},
         'path': None,

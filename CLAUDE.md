@@ -9,30 +9,29 @@ Ablageort: `~/Documents/Coding/bensn-hub/feed/CLAUDE.md`
 
 - **Name:** Bensn-Feed
 - **Domain:** feed.bensn.me
-- **Version:** v2.2.0 (Compose-UI für alle 9 Journal-Typen)
-- **Status:** active — Obsidian ist als Eingabe-Tool für ALLE Typen abgelöst; offen ist nur
-  noch die vollständige Historien-Migration + das Abschalten des Git-Sync (siehe Roadmap)
-- **Stack:** Vanilla JS + Flask (Python), bensn.me Design System (`/shared/bensn.css`+`bensn.js`)
+- **Version:** v2.3.0 (volle Historien-Migration + Obsidian-Decommission)
+- **Status:** active — Obsidian-Ablösung vollständig abgeschlossen (Compose-UI für alle 9
+  Typen, komplette Historie migriert, Git-Sync abgeschaltet)
+- **Stack:** Vanilla JS + Flask (Python) + PostgreSQL, bensn.me Design System (`/shared/bensn.css`+`bensn.js`)
 
 ---
 
 ## Was ist das Projekt?
 
-Persönlicher scrollbarer Feed auf `feed.bensn.me`. Zeigt Obsidian Journal-Notes aus
-`01_Journal` (per Git-Sync gespiegelt, noch die einzige Quelle für die HISTORIE aller Typen
-außer Mood — siehe Roadmap für die geplante volle Migration), native `journal_entries` aus
-Postgres, Worktracker-Events und Health-Events (Medikamente/Blutdruck/Mahlzeiten) gemischt
-in einer Timeline.
+Persönlicher scrollbarer Feed auf `feed.bensn.me`. Zeigt **ausschließlich** `journal_entries`
+aus Postgres (alle 9 Typen, komplette Historie seit 2026-03 bzw. dem jeweils ersten Eintrag
+pro Typ), gemischt mit Worktracker-Events und Health-Events (Medikamente/Blutdruck/
+Mahlzeiten) in einer Timeline. Obsidian ist komplett aus dem Bild — weder als Lese- noch als
+Schreibquelle (siehe "Obsidian Vault Sync" unten für die Abschalt-Details).
 
-**Alle 9 Journal-Typen haben seit v2.2.0 ein natives Compose-UI** — ein "+"-Button öffnet
-einen Typ-Picker, dann entweder das Mood-Check-in (Valenz-Slider, Zusammenhang-/
-Beschreibung-Multiselect mit den echten Tag-Listen aus der ModalForms-Config,
+**Alle 9 Journal-Typen haben ein natives Compose-UI** — ein "+"-Button öffnet einen
+Typ-Picker, dann entweder das Mood-Check-in (Valenz-Slider, Zusammenhang-/Beschreibung-
+Multiselect mit den echten Tag-Listen aus der ehemaligen ModalForms-Config,
 Tagesreflexion-Toggle) oder ein generisches Formular (Titel, Tags, Body-Textarea — bei den
-strukturierten Typen mit vorausgefüllten Markdown-Überschriften als Vorlage, z.B. `## Was
+strukturierten Typen mit vorausgefüllten Markdown-Überschriften als Vorlage, z.B. `## Was /
 Kontext / Verlauf / Maßnahmen` für Symptome — plus 0-2 typ-spezifische Zusatzfelder, siehe
-`ENTRY_TYPE_CONFIG` im Frontend). `fits` erlaubt zusätzlich einen Bild-Upload über den
-bestehenden `/api/upload`-Endpoint. Obsidian wird für neue Einträge nicht mehr gebraucht —
-offen ist nur noch die Migration der bestehenden Historie (siehe Roadmap).
+`ENTRY_TYPE_CONFIG` im Frontend). `fits` erlaubt zusätzlich Bild-Upload über den bestehenden
+`/api/upload`-Endpoint.
 
 Alle 71 historischen Mood-Notes (22.03.–02.05.2026) wurden bereits per
 `scripts/migrate_mood_notes.py` migriert (`migrated_from: obsidian` bzw. `apple_journal`
@@ -59,7 +58,8 @@ wurde übersprungen — sie enthält ohnehin keine echten Mood-Daten.
 │   └── requirements.txt
 ├── schema.sql            ← journal_entries (per pg_dump/CREATE TABLE, kein Migrationsrunner)
 ├── scripts/
-│   └── migrate_mood_notes.py   ← einmaliges Migrationsskript (siehe Kommentar im File)
+│   ├── migrate_mood_notes.py     ← einmaliges Migrationsskript für Mood (bereits gelaufen)
+│   └── migrate_journal_notes.py  ← einmaliges Migrationsskript für die restlichen 8 Typen (bereits gelaufen)
 ├── Desing/              ← frühe Design-Mockups/Prototypen (Referenz, kein Live-Code)
 ├── docs/changelogs/
 └── CLAUDE.md
@@ -115,21 +115,19 @@ ssh bensn systemctl restart feed-api
 
 | Route | Auth | Beschreibung |
 |-------|------|--------------|
-| `GET /api/feed` | Cookie (bensn-auth) | Alle Notes (privat) |
-| `GET /api/feed/shared` | öffentlich | Gefilterte Notes per share_config.json |
-| `GET /api/feed/combined` | Cookie (bensn-auth) | Notes + `journal_entries` + Worktracker + Health-Events |
-| `GET /api/feed/combined/shared` | öffentlich | Shared Notes + `journal_entries` (gefiltert) + Worktracker (ohne Details, KEINE Health-Events) |
-| `GET/POST /api/journal/entries`, `/entry` | Cookie (bensn-auth) | Native Journal-Einträge CRUD (aktuell nur `mood` im Compose-UI genutzt) |
+| `GET /api/feed/combined` | Cookie (bensn-auth) | `journal_entries` + Worktracker + Health-Events |
+| `GET /api/feed/combined/shared` | öffentlich | Shared `journal_entries` (gefiltert) + Worktracker (ohne Details, KEINE Health-Events) |
+| `GET/POST /api/journal/entries`, `/entry` | Cookie (bensn-auth) | Journal-Einträge CRUD (alle 9 Typen) |
 | `PATCH/DELETE /api/journal/entry/<id>` | Cookie (bensn-auth) | Editieren / soft-löschen |
 | `GET /api/journal/mood-summary` | Cookie (bensn-auth) | Valenz-Verlauf für Dashboards |
-| `GET /api/feed/stats` | Cookie (bensn-auth) | Statistiken nach Typ/Folder |
-| `GET /api/feed/<note_id>` | Cookie (bensn-auth) | Einzelne Note |
 | `GET/POST /api/share/config` | Cookie / `X-API-Key` (POST) | Sharing-Config lesen/schreiben |
-| `POST /api/upload` | öffentlich (nginx, kein Cookie) | Bild-Upload (HEIC/JPEG, max 20MB) — für iOS Shortcuts |
+| `POST /api/upload` | öffentlich (nginx, kein Cookie) | Bild-Upload (HEIC/JPEG, max 20MB) — für iOS Shortcuts + Fits-Compose |
 | `GET /api/oembed` | öffentlich | Spotify/YouTube oEmbed Proxy |
-| `POST /api/webhook` | HMAC SHA-256 | GitHub Webhook → git sync |
-| `POST /api/sync` | Cookie (bensn-auth) | Manueller git sync |
 | `GET /health` | öffentlich | Health Check |
+
+**Entfernt (2026-09-16, Obsidian-Decommission):** `/api/feed`, `/api/feed/shared`,
+`/api/feed/stats`, `/api/feed/<note_id>`, `/api/webhook`, `/api/sync`, `/api/wikilinks` —
+alle hingen am Datei-Lesepfad, keine wurde vom aktuellen Frontend genutzt.
 
 ---
 
@@ -146,22 +144,31 @@ mittlerweile korrigiert.)*
 
 ---
 
-## Obsidian Vault Sync (wird im laufenden Umbau abgeschafft)
+## Obsidian Vault Sync — abgeschaltet seit 2026-09-16
 
-```
-iPhone/Mac (Obsidian Git Plugin, auto-commit ~10min)
-  → push → BBBensn/BensnKnowledge (privat)
-  → GitHub Webhook → POST /api/webhook (sofort)
-  → Cron alle 10min: git fetch --all && reset --hard origin/main
-     GIT_SSH_COMMAND='ssh -i /root/.ssh/feed_deploy'
+Bis v2.2.0 lief hier ein Git-Sync (iPhone/Mac Obsidian Git-Plugin → GitHub-Webhook +
+10-Minuten-Cron → `/var/www/feed/vault/` → `load_all_notes()` liest `.md`-Dateien direkt
+von Disk). Das ist komplett entfernt:
 
-Vault auf Server: /var/www/feed/vault/
-Journal-Pfad:    /var/www/feed/vault/01_Journal/
-```
+- Cron-Eintrag (`*/10 * * * * ... feed/vault ...`) aus der Root-Crontab gelöscht (Backup:
+  `/tmp/crontab.bak` auf dem Server, falls doch mal gebraucht)
+- `/var/www/feed/vault/` (288MB Git-Clone) gelöscht — reine Mirror-Kopie, die echte Quelle
+  bleibt der lokale Obsidian-Vault + das private `BensnKnowledge`-GitHub-Repo, beide
+  unangetastet
+- `/api/webhook`, `/api/sync`, `/api/feed`, `/api/feed/shared`, `/api/feed/stats`,
+  `/api/feed/<note_id>`, `/api/wikilinks` aus `app.py` entfernt (alle hingen an
+  `load_all_notes()`/`VAULT_PATH`, keiner wurde vom aktuellen Frontend genutzt)
+- `load_all_notes()`, `load_note()`, `extract_images()`, `extract_media_links()`,
+  `parse_date()`, `date_from_filename()` als tote Funktionen entfernt
+- nginx-Config bereinigt (`bensn-meta/nginx/feed.bensn.me`): Location-Blöcke für die
+  entfernten Routen raus
+- **Nicht entfernt:** der GitHub-Webhook auf dem `BensnKnowledge`-Repo selbst (Settings →
+  Webhooks) feuert technisch weiterhin bei jedem Push, bekommt jetzt aber nur noch ein
+  harmloses 302/404 zurück — kann bei Gelegenheit manuell in GitHub gelöscht werden, ist
+  aber kein Fehlerzustand
 
-**Wird abgelöst:** siehe Roadmap — Journal-Einträge wandern nach `journal_entries` (Postgres),
-natives Compose-UI im Feed ersetzt Obsidian als Eingabe-Tool, danach wird dieser
-Sync-Mechanismus komplett entfernt.
+Der Feed liest jetzt ausschließlich aus `journal_entries` (Postgres) — Schreiben in
+Obsidian hat ab sofort keine Wirkung mehr auf den Feed.
 
 ---
 
@@ -230,7 +237,7 @@ ein zweites HTTP-Client-Pattern wäre unnötig gewesen. Nur in `feed_combined()`
 | v2.0.3 | Health → Feed Integration (Medikamente/BP/Mahlzeiten als Timeline-Events) | ✅ deployed (2026-09-16) |
 | v2.1.0 | `journal_entries`-Schema + natives Mood-Compose + Mood-Migration (71 Notes) | ✅ deployed (2026-09-16) |
 | v2.2.0 | Compose-UI für restliche 8 Journal-Typen (Typ-Picker, generisches Formular, Body-Templates, Bild-Upload für Fits) | ✅ deployed (2026-09-16) |
-| — | Vollständige Historien-Migration + Obsidian-Decommission | ⬜ geplant |
+| v2.3.0 | Vollständige Historien-Migration (294 weitere Einträge, 8 Typen) + Obsidian-Decommission (Cron, Webhook, Vault-Clone, tote Routen/Tabellen entfernt) | ✅ deployed (2026-09-16) |
 
 Details zur vollständigen Versionshistorie: `docs/changelogs/CHANGELOG.md`.
 

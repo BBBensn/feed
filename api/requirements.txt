@@ -1,7 +1,5 @@
 flask>=3.0.0
-flask-cors>=4.0.0
-python-frontmatter>=1.1.0
+psycopg2-binary>=2.9.9
 pillow>=10.0.0
 pillow-heif>=0.16.0
-requests>=2.31.0
 gunicorn>=21.2.0
