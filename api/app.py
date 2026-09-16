@@ -412,16 +412,16 @@ def feed_combined():
     health events. Health events are intentionally NOT included in feed_combined_shared()
     below — medical data has no business appearing on a link shared with other people."""
     notes = fetch_journal_events(limit=1000)
-    events = fetch_shift_events(limit=100, include_details=True)
-    events += fetch_medication_events(limit=100)
-    events += fetch_bp_events(limit=100)
-    events += fetch_meal_events(limit=100)
+    events = fetch_shift_events(limit=500, include_details=True)
+    events += fetch_medication_events(limit=500)
+    events += fetch_bp_events(limit=500)
+    events += fetch_meal_events(limit=500)
     combined = notes + events
     combined.sort(key=lambda x: x.get('date') or '', reverse=True)
     try:
-        limit = int(request.args.get("limit", 500))
+        limit = int(request.args.get("limit", 5000))
     except ValueError:
-        limit = 500
+        limit = 5000
     return jsonify({"count": len(combined[:limit]), "notes": combined[:limit]})
 
 
@@ -431,13 +431,13 @@ def feed_combined_shared():
     config = load_share_config()
     notes = fetch_journal_events(limit=1000)
     shared_notes = [n for n in notes if is_note_shared(n, config)]
-    events = fetch_shift_events(limit=100, include_details=False)
+    events = fetch_shift_events(limit=500, include_details=False)
     combined = shared_notes + events
     combined.sort(key=lambda x: x.get('date') or '', reverse=True)
     try:
-        limit = int(request.args.get("limit", 500))
+        limit = int(request.args.get("limit", 5000))
     except ValueError:
-        limit = 500
+        limit = 5000
     return jsonify({"count": len(combined[:limit]), "notes": combined[:limit]})
 
 

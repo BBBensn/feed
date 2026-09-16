@@ -9,7 +9,7 @@ Ablageort: `~/Documents/Coding/bensn-hub/feed/CLAUDE.md`
 
 - **Name:** Bensn-Feed
 - **Domain:** feed.bensn.me
-- **Version:** v2.3.0 (volle Historien-Migration + Obsidian-Decommission)
+- **Version:** v2.4.0 (Edit/Delete, Tags-Anzeige, editierbarer Zeitpunkt, Limit-Fix)
 - **Status:** active — Obsidian-Ablösung vollständig abgeschlossen (Compose-UI für alle 9
   Typen, komplette Historie migriert, Git-Sync abgeschaltet)
 - **Stack:** Vanilla JS + Flask (Python) + PostgreSQL, bensn.me Design System (`/shared/bensn.css`+`bensn.js`)
@@ -238,6 +238,7 @@ ein zweites HTTP-Client-Pattern wäre unnötig gewesen. Nur in `feed_combined()`
 | v2.1.0 | `journal_entries`-Schema + natives Mood-Compose + Mood-Migration (71 Notes) | ✅ deployed (2026-09-16) |
 | v2.2.0 | Compose-UI für restliche 8 Journal-Typen (Typ-Picker, generisches Formular, Body-Templates, Bild-Upload für Fits) | ✅ deployed (2026-09-16) |
 | v2.3.0 | Vollständige Historien-Migration (294 weitere Einträge, 8 Typen) + Obsidian-Decommission (Cron, Webhook, Vault-Clone, tote Routen/Tabellen entfernt) | ✅ deployed (2026-09-16) |
+| v2.4.0 | Bugfix: `limit=500` schnitt bei kombiniertem Pool (Journal+Worktracker+Health) Einträge vor dem 10. Mai ab (auf 5000 angehoben); Bugfix: Tags wurden gespeichert, aber nie angezeigt; Sync-Button entfernt (war für Git-Sync, tot seit v2.3.0); Edit-Zeitpunkt + Löschen für alle Journal-Einträge; Zeitpunkt-Feld (Standard jetzt, editierbar) in Mood- und generischem Compose-Sheet | ✅ deployed (2026-09-16) |
 
 Details zur vollständigen Versionshistorie: `docs/changelogs/CHANGELOG.md`.
 

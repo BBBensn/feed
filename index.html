@@ -367,6 +367,14 @@ mark {
 }
 .note-expand:hover { opacity: .7; }
 
+/* ── Entry tags + edit/delete actions ── */
+.entry-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: .5rem; }
+.entry-tag { font-family: 'DM Mono', monospace; font-size: 10px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); color: var(--muted); }
+.entry-actions { display: flex; gap: .8rem; margin-top: .6rem; }
+.entry-action-btn { font-family: 'DM Mono', monospace; font-size: 10px; background: none; border: none; color: var(--muted); cursor: pointer; padding: 0; letter-spacing: .04em; }
+.entry-action-btn:hover { color: var(--text); }
+.entry-action-btn.danger:hover { color: var(--accent-red); }
+
 /* ── Photo Grid (Telegram-style) ── */
 .photo-grid {
   margin-top: .75rem;
@@ -692,7 +700,6 @@ footer {
 
   <div class="toolbar">
     <button class="tb-sync" id="composeBtn" title="Neuer Eintrag" onclick="openComposeSheet()"><span class="material-symbols-outlined">add</span></button>
-    <button class="tb-sync" id="syncBtn" title="Sync"><span class="material-symbols-outlined">sync</span></button>
     <a class="tb-sync" href="/shares" title="Share-Links verwalten" style="text-decoration:none;display:flex;align-items:center;justify-content:center"><span class="material-symbols-outlined">share</span></a>
     <button class="tb-filter-toggle tb-active" id="filterToggle">Filter</button>
     <div class="tb-middle">
@@ -763,6 +770,8 @@ footer {
   <div class="overlay-sheet">
     <div class="sheet-title" id="genericSheetTitle">Neuer Eintrag</div>
     <div class="input-row"><input type="text" id="genericTitle" placeholder="Titel (optional)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;margin-bottom:.75rem"></div>
+    <div class="sheet-label">Zeitpunkt</div>
+    <div class="input-row"><input type="datetime-local" id="genericDatetime" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;margin-bottom:.75rem"></div>
     <div id="genericExtraFields"></div>
     <textarea class="note-input" id="genericBody" placeholder="Text…" style="min-height:160px"></textarea>
     <div class="input-row"><input type="text" id="genericTags" placeholder="Tags, Komma-getrennt (optional)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;outline:none;margin-bottom:.75rem"></div>
@@ -796,11 +805,26 @@ footer {
       <button class="tag-btn" id="tagesreflexionToggle" onclick="toggleTagesreflexion(this)">Nein</button>
     </div>
 
+    <div class="sheet-label">Zeitpunkt</div>
+    <div class="input-row"><input type="datetime-local" id="moodDatetime" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;margin-bottom:.75rem"></div>
+
     <textarea class="note-input" id="moodBody" placeholder="Ein paar Worte dazu (optional)…"></textarea>
 
     <div class="sheet-btns">
       <button class="btn-cancel" onclick="closeComposeSheet()">Abbrechen</button>
       <button class="btn-save" onclick="saveMoodEntry()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SHEET: ZEITPUNKT BEARBEITEN ═══ -->
+<div class="overlay" id="sheetEditTime" onclick="if(event.target===this) closeComposeSheet()">
+  <div class="overlay-sheet">
+    <div class="sheet-title">Zeitpunkt ändern</div>
+    <div class="input-row"><input type="datetime-local" id="editTimeInput" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;margin-bottom:.75rem"></div>
+    <div class="sheet-btns">
+      <button class="btn-cancel" onclick="closeComposeSheet()">Abbrechen</button>
+      <button class="btn-save" onclick="saveEditedTime()">Speichern</button>
     </div>
   </div>
 </div>
@@ -1206,12 +1230,14 @@ function renderNote(note,idx){
   const titleHtml=ct&&ct.length>1?'<div class="note-title">'+titleDisplay+'</div>':'';
   const metaHtml='<div class="note-meta"><span class="note-type-badge '+badgeClass(type)+'">'+typeLabel(type)+'</span><span class="note-date">'+fmtTime(note.date)+'</span></div>';
   const extraHtml=moodVizHtml(note);
+  const footerHtml=tagsHtml(note)+entryActionsHtml(note);
   if(note.images&&note.images.length>0){
     const grid=buildPhotoGrid(note.images);
     const textOnly=raw.split('\n').filter(function(l){return !/^!\[/.test(l.trim());}).join('\n').trim();
     el.innerHTML=metaHtml+titleHtml+extraHtml;
     el.appendChild(grid);
     if(textOnly){const body=document.createElement('div');body.className='note-body';body.style.marginTop='.75rem';body.innerHTML=renderMarkdown(textOnly,ct,type);el.appendChild(body);}
+    el.insertAdjacentHTML('beforeend',footerHtml);
     processEmbeds(el);
   } else if(raw.length>400){
     const shortRaw=raw.slice(0,400).trimEnd()+'…';
@@ -1220,14 +1246,64 @@ function renderNote(note,idx){
     el.innerHTML=metaHtml+titleHtml+extraHtml
       +'<div class="note-body note-body-preview">'+renderMarkdown(shortRaw,ct,type)+'</div>'
       +'<div class="note-body note-body-full">'+renderMarkdown(raw,ct,type)+'</div>'
-      +'<button class="note-expand" onclick="toggleExpand(\''+id+'\',this)">'+(autoExpand?'less ▴':'more ▾')+'</button>';
+      +'<button class="note-expand" onclick="toggleExpand(\''+id+'\',this)">'+(autoExpand?'less ▴':'more ▾')+'</button>'
+      +footerHtml;
     if(autoExpand) el.classList.add('expanded');
     processEmbeds(el);
   } else {
-    el.innerHTML=metaHtml+titleHtml+extraHtml+'<div class="note-body">'+renderMarkdown(raw,ct,type)+'</div>';
+    el.innerHTML=metaHtml+titleHtml+extraHtml+'<div class="note-body">'+renderMarkdown(raw,ct,type)+'</div>'+footerHtml;
     processEmbeds(el);
   }
   return el;
+}
+
+/* Tag chips — filters out the auto-added type tag (e.g. "mood") since the badge already says it */
+function tagsHtml(note){
+  const tags=(note.tags||[]).filter(function(t){return t && t.toLowerCase()!==(note.type||'').toLowerCase();});
+  if(!tags.length) return '';
+  return '<div class="entry-tags">'+tags.map(function(t){return '<span class="entry-tag">'+escHtml(t)+'</span>';}).join('')+'</div>';
+}
+/* Edit-time + delete actions for natively-composed entries (all journal_entries have db_id) */
+function entryActionsHtml(note){
+  if(!note.db_id) return '';
+  return '<div class="entry-actions">'
+    +'<button class="entry-action-btn" onclick="openEditTimeSheet(\''+note.db_id+'\',\''+note.date+'\')">Zeitpunkt ändern</button>'
+    +'<button class="entry-action-btn danger" onclick="deleteJournalEntry(\''+note.db_id+'\')">Löschen</button>'
+    +'</div>';
+}
+let _editTimeEntryId=null;
+function openEditTimeSheet(dbId,viennaNaiveDate){
+  // note.date is already Vienna-local naive (utc_to_vienna_naive() on the backend) —
+  // no timezone conversion needed, just trim to the datetime-local input's format.
+  _editTimeEntryId=dbId;
+  document.getElementById('editTimeInput').value=(viennaNaiveDate||'').slice(0,16);
+  document.getElementById('sheetEditTime').classList.add('visible');
+}
+async function saveEditedTime(){
+  const val=document.getElementById('editTimeInput').value;
+  if(!val) return;
+  try{
+    const r=await fetch('/api/journal/entry/'+_editTimeEntryId,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({entry_date:new Date(val).toISOString()})
+    });
+    if(!r.ok) throw new Error(r.status);
+    closeComposeSheet();
+    await loadFeed();
+  }catch(e){
+    alert('Speichern fehlgeschlagen: '+e.message);
+  }
+}
+async function deleteJournalEntry(dbId){
+  if(!confirm('Diesen Eintrag wirklich löschen?')) return;
+  try{
+    const r=await fetch('/api/journal/entry/'+dbId,{method:'DELETE'});
+    if(!r.ok) throw new Error(r.status);
+    await loadFeed();
+  }catch(e){
+    alert('Löschen fehlgeschlagen: '+e.message);
+  }
 }
 
 /* Visualizes valenz/tags for natively-composed mood entries (journal_entries.fields).
@@ -1404,7 +1480,7 @@ document.getElementById('filterBar').addEventListener('click',function(e){
 async function loadFeed(){
   const dot=document.getElementById('statusDot'),st=document.getElementById('statusText');
   try{
-    const r=await fetch('/api/feed/combined?limit=500');
+    const r=await fetch('/api/feed/combined?limit=5000');
     if(!r.ok) throw new Error(r.status);
     const data=await r.json();
     allNotes=data.notes||[];
@@ -1419,13 +1495,6 @@ async function loadFeed(){
     document.getElementById('feed').innerHTML='<div class="state-msg">Verbindungsfehler<br><span style="font-size:11px;color:var(--accent-red)">'+e.message+'</span></div>';
   }
 }
-document.getElementById('syncBtn').addEventListener('click',async function(){
-  const btn=document.getElementById('syncBtn');btn.classList.add('spinning');
-  try{
-    await fetch('/api/sync',{method:'POST'});
-    setTimeout(async function(){await loadFeed();btn.classList.remove('spinning');},2000);
-  }catch(e){btn.classList.remove('spinning');}
-});
 
 /* Auth wird von Nginx/Cookie übernommen — Seite lädt direkt */
 function showLoginOverlay(){
@@ -1480,6 +1549,7 @@ function openGenericEntrySheet(type){
   document.getElementById('genericSheetTitle').textContent='Neuer Eintrag · '+cfg.label;
   document.getElementById('genericTitle').value='';
   document.getElementById('genericTags').value='';
+  document.getElementById('genericDatetime').value=nowForDatetimeLocal();
   document.getElementById('genericBody').value=cfg.bodyTemplate||'';
   document.getElementById('genericExtraFields').innerHTML=cfg.extraFields.map(extraFieldHtml).join('');
   _genericImageUrl=null;
@@ -1523,6 +1593,7 @@ async function saveGenericEntry(){
   var tags=document.getElementById('genericTags').value.split(',').map(function(s){return s.trim();}).filter(Boolean);
   var images=_genericImageUrl?[_genericImageUrl]:[];
   var body=document.getElementById('genericBody').value;
+  var dtVal=document.getElementById('genericDatetime').value;
   if(_genericImageUrl) body='![](' + _genericImageUrl + ')\n\n' + body;
   try{
     var r=await fetch('/api/journal/entry',{
@@ -1530,6 +1601,7 @@ async function saveGenericEntry(){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         entry_type:type,
+        entry_date:dtVal?new Date(dtVal).toISOString():null,
         title:document.getElementById('genericTitle').value||null,
         body:body,
         tags:tags,
@@ -1582,9 +1654,14 @@ function selectEntryType(type){
   else openGenericEntrySheet(type);
 }
 function closeComposeSheet(){
-  ['sheetTypePicker','sheetGeneric','sheetMood'].forEach(function(id){
+  ['sheetTypePicker','sheetGeneric','sheetMood','sheetEditTime'].forEach(function(id){
     document.getElementById(id).classList.remove('visible');
   });
+}
+function nowForDatetimeLocal(){
+  var d=new Date();
+  d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
+  return d.toISOString().slice(0,16);
 }
 function openMoodSheet(){
   _selectedZusammenhang=[];_selectedBeschreibung=[];_tagesreflexion=false;
@@ -1594,17 +1671,20 @@ function openMoodSheet(){
   document.getElementById('beschreibungTags').innerHTML=tagPickerHtml(BESCHREIBUNG_TAGS,_selectedBeschreibung,'beschreibung');
   var tr=document.getElementById('tagesreflexionToggle');tr.textContent='Nein';tr.classList.remove('active');
   document.getElementById('moodBody').value='';
+  document.getElementById('moodDatetime').value=nowForDatetimeLocal();
   document.getElementById('sheetMood').classList.add('visible');
 }
 async function saveMoodEntry(){
   var valenz=parseInt(document.getElementById('valenzSlider').value,10);
   var body=document.getElementById('moodBody').value||'';
+  var dtVal=document.getElementById('moodDatetime').value;
   try{
     var r=await fetch('/api/journal/entry',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         entry_type:'mood',
+        entry_date:dtVal?new Date(dtVal).toISOString():null,
         body:body,
         tags:['mood'],
         fields:{valenz:valenz,zusammenhang:_selectedZusammenhang,beschreibung:_selectedBeschreibung,tagesreflexion:_tagesreflexion}
