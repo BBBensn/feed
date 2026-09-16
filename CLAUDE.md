@@ -9,9 +9,9 @@ Ablageort: `~/Documents/Coding/bensn-hub/feed/CLAUDE.md`
 
 - **Name:** Bensn-Feed
 - **Domain:** feed.bensn.me
-- **Version:** v2.1.0 (natives Mood-Compose + journal_entries)
-- **Status:** active — Obsidian-Ablösung läuft (Mood erledigt, 8 weitere Typen + volle
-  Historien-Migration folgen, siehe Roadmap)
+- **Version:** v2.2.0 (Compose-UI für alle 9 Journal-Typen)
+- **Status:** active — Obsidian ist als Eingabe-Tool für ALLE Typen abgelöst; offen ist nur
+  noch die vollständige Historien-Migration + das Abschalten des Git-Sync (siehe Roadmap)
 - **Stack:** Vanilla JS + Flask (Python), bensn.me Design System (`/shared/bensn.css`+`bensn.js`)
 
 ---
@@ -19,19 +19,26 @@ Ablageort: `~/Documents/Coding/bensn-hub/feed/CLAUDE.md`
 ## Was ist das Projekt?
 
 Persönlicher scrollbarer Feed auf `feed.bensn.me`. Zeigt Obsidian Journal-Notes aus
-`01_Journal` (per Git-Sync gespiegelt, für 8 von 9 Typen noch die einzige Quelle),
-native `journal_entries` aus Postgres (aktuell nur `mood`, siehe unten), Worktracker-Events
-und Health-Events (Medikamente/Blutdruck/Mahlzeiten) gemischt in einer Timeline.
+`01_Journal` (per Git-Sync gespiegelt, noch die einzige Quelle für die HISTORIE aller Typen
+außer Mood — siehe Roadmap für die geplante volle Migration), native `journal_entries` aus
+Postgres, Worktracker-Events und Health-Events (Medikamente/Blutdruck/Mahlzeiten) gemischt
+in einer Timeline.
 
-**Mood-Einträge werden seit v2.1.0 nativ im Feed erstellt** — ein "+"-Button öffnet ein
-Apple-Journal-artiges Check-in (Valenz-Slider -100..100, Zusammenhang-/Beschreibung-
-Multiselect mit den echten Tag-Listen aus der alten ModalForms-Config, Tagesreflexion-
-Toggle), kein Obsidian mehr nötig dafür. Alle 71 historischen Mood-Notes (22.03.–02.05.2026)
-wurden per `scripts/migrate_mood_notes.py` migriert (`migrated_from: obsidian` bzw.
-`apple_journal` für die ~ursprünglich aus Apple Journal importierten). Eine Note
-(`2026-05-06-1344-mood.md`) hatte kaputtes Frontmatter (nicht ausgeführtes Templater-Syntax
-statt echter Werte, vermutlich ein Templater-Fehler beim Erstellen) und wurde übersprungen —
-sie enthält ohnehin keine echten Mood-Daten.
+**Alle 9 Journal-Typen haben seit v2.2.0 ein natives Compose-UI** — ein "+"-Button öffnet
+einen Typ-Picker, dann entweder das Mood-Check-in (Valenz-Slider, Zusammenhang-/
+Beschreibung-Multiselect mit den echten Tag-Listen aus der ModalForms-Config,
+Tagesreflexion-Toggle) oder ein generisches Formular (Titel, Tags, Body-Textarea — bei den
+strukturierten Typen mit vorausgefüllten Markdown-Überschriften als Vorlage, z.B. `## Was
+Kontext / Verlauf / Maßnahmen` für Symptome — plus 0-2 typ-spezifische Zusatzfelder, siehe
+`ENTRY_TYPE_CONFIG` im Frontend). `fits` erlaubt zusätzlich einen Bild-Upload über den
+bestehenden `/api/upload`-Endpoint. Obsidian wird für neue Einträge nicht mehr gebraucht —
+offen ist nur noch die Migration der bestehenden Historie (siehe Roadmap).
+
+Alle 71 historischen Mood-Notes (22.03.–02.05.2026) wurden bereits per
+`scripts/migrate_mood_notes.py` migriert (`migrated_from: obsidian` bzw. `apple_journal`
+für die ursprünglich aus Apple Journal importierten). Eine Note (`2026-05-06-1344-mood.md`)
+hatte kaputtes Frontmatter (nicht ausgeführtes Templater-Syntax statt echter Werte) und
+wurde übersprungen — sie enthält ohnehin keine echten Mood-Daten.
 
 Öffentlicher Teilbereich: `feed.bensn.me/shared` — gefiltert per `share_config.json` +
 `private: true` im Note-Frontmatter.
@@ -222,7 +229,7 @@ ein zweites HTTP-Client-Pattern wäre unnötig gewesen. Nur in `feed_combined()`
 | v2.0.0–v2.0.2 | Login-Overlay entfernt, Wikilink-Stats-Drawer | ✅ deployed |
 | v2.0.3 | Health → Feed Integration (Medikamente/BP/Mahlzeiten als Timeline-Events) | ✅ deployed (2026-09-16) |
 | v2.1.0 | `journal_entries`-Schema + natives Mood-Compose + Mood-Migration (71 Notes) | ✅ deployed (2026-09-16) |
-| — | Compose-UI für restliche 8 Journal-Typen | ⬜ geplant |
+| v2.2.0 | Compose-UI für restliche 8 Journal-Typen (Typ-Picker, generisches Formular, Body-Templates, Bild-Upload für Fits) | ✅ deployed (2026-09-16) |
 | — | Vollständige Historien-Migration + Obsidian-Decommission | ⬜ geplant |
 
 Details zur vollständigen Versionshistorie: `docs/changelogs/CHANGELOG.md`.

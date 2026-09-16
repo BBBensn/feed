@@ -747,6 +747,36 @@ footer {
   <div id="lightbox-counter"></div>
 </div>
 
+<!-- ═══ SHEET: TYP WÄHLEN ═══ -->
+<div class="overlay" id="sheetTypePicker" onclick="if(event.target===this) closeComposeSheet()">
+  <div class="overlay-sheet">
+    <div class="sheet-title">Neuer Eintrag</div>
+    <div class="tag-picker" id="typePickerList" style="margin-bottom:.5rem"></div>
+    <div class="sheet-btns" style="margin-top:1rem">
+      <button class="btn-cancel" onclick="closeComposeSheet()" style="flex:1">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SHEET: GENERISCHER EINTRAG (8 Typen außer Mood) ═══ -->
+<div class="overlay" id="sheetGeneric" onclick="if(event.target===this) closeComposeSheet()">
+  <div class="overlay-sheet">
+    <div class="sheet-title" id="genericSheetTitle">Neuer Eintrag</div>
+    <div class="input-row"><input type="text" id="genericTitle" placeholder="Titel (optional)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;margin-bottom:.75rem"></div>
+    <div id="genericExtraFields"></div>
+    <textarea class="note-input" id="genericBody" placeholder="Text…" style="min-height:160px"></textarea>
+    <div class="input-row"><input type="text" id="genericTags" placeholder="Tags, Komma-getrennt (optional)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;outline:none;margin-bottom:.75rem"></div>
+    <div id="genericImageRow" style="display:none;margin-bottom:.75rem">
+      <input type="file" id="genericImageInput" accept="image/*">
+      <div id="genericImagePreview" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:4px"></div>
+    </div>
+    <div class="sheet-btns">
+      <button class="btn-cancel" onclick="closeComposeSheet()">Abbrechen</button>
+      <button class="btn-save" onclick="saveGenericEntry()">Speichern</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ SHEET: MOOD-EINTRAG ═══ -->
 <div class="overlay" id="sheetMood" onclick="if(event.target===this) closeComposeSheet()">
   <div class="overlay-sheet">
@@ -1403,6 +1433,118 @@ function showLoginOverlay(){
   window.location.href='https://auth.bensn.me/auth/login?next='+encodeURIComponent(window.location.href);
 }
 
+/* ── Compose: generischer Eintrag (8 Typen außer Mood) ── */
+const UPLOAD_API_KEY='3dbdb54401dd731f5e454053cd64606f6978986a8312bdab991bf9264210d152';
+const ENTRY_TYPE_CONFIG={
+  diary:{label:'Diary',color:'#e5b181',bodyTemplate:'',extraFields:[
+    {key:'tagesreflexion',label:'Tagesreflexion',type:'toggle'}]},
+  reflexion:{label:'Reflexion',color:'#ffb400',bodyTemplate:'',extraFields:[
+    {key:'mood',label:'Stimmung (1-5, optional)',type:'number'}]},
+  symptome:{label:'Symptom',color:'#f96f5d',bodyTemplate:'## Was\n\n## Kontext\n\n## Verlauf\n\n## Maßnahmen\n',extraFields:[
+    {key:'kategorie',label:'Kategorie (Komma-getrennt)',type:'tags'}]},
+  therapie:{label:'Therapie',color:'#9c3848',bodyTemplate:'## Vor der Session\n\n## Themen der Session\n\n## Erkenntnisse\n\n## Hausaufgaben / Nächste Schritte\n\n## Nachgedanken\n',extraFields:[
+    {key:'session_nr',label:'Sitzung Nr. (optional)',type:'text'},
+    {key:'therapeut',label:'Therapeut:in (optional)',type:'text'}]},
+  fits:{label:'Fit',color:'#C9B6BE',bodyTemplate:'',allowImage:true,extraFields:[
+    {key:'location',label:'Ort (optional)',type:'text'},
+    {key:'anlass',label:'Anlass (optional)',type:'text'}]},
+  arbeit:{label:'Arbeit',color:'#065143',bodyTemplate:'## Was war heute erwähnenswert?\n\n## Stimmung / Atmosphäre\n\n## Offenes / Follow-up\n',extraFields:[]},
+  ideas:{label:'Idea',color:'#6622cc',bodyTemplate:'## Die Idee\n\n## Ausführlicher\n\n## Warum interessant?\n\n## Nächster Schritt\n',extraFields:[
+    {key:'status',label:'Status',type:'select',options:['raw','exploring','parked','active','done']},
+    {key:'bereich',label:'Bereich',type:'select',options:['coding','music','fashion','creative','life','other']}]},
+  project_log:{label:'Project Log',color:'#1d4e89',bodyTemplate:'## Was wurde gemacht?\n\n## Ergebnis / Stand\n\n## Blocker / Offenes\n\n## Nächste Schritte\n',extraFields:[
+    {key:'project',label:'Projekt (optional)',type:'text'}]},
+  mood:{label:'Mood',color:'#b8ebd0'},
+};
+let _genericImageUrl=null;
+
+function extraFieldHtml(f){
+  var id='genericField_'+f.key;
+  if(f.type==='toggle'){
+    return '<div class="toggle-row"><span>'+escHtml(f.label)+'</span><button class="tag-btn" id="'+id+'" data-on="false" onclick="var b=this;b.dataset.on=(b.dataset.on!==\'true\');b.classList.toggle(\'active\');b.textContent=b.dataset.on===\'true\'?\'Ja\':\'Nein\'">Nein</button></div>';
+  }
+  if(f.type==='select'){
+    return '<div class="sheet-label">'+escHtml(f.label)+'</div><div class="input-row"><select id="'+id+'" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-family:\'DM Mono\',monospace;font-size:12px">'
+      +f.options.map(function(o){return '<option value="'+o+'">'+o+'</option>';}).join('')+'</select></div>';
+  }
+  if(f.type==='number'){
+    return '<div class="sheet-label">'+escHtml(f.label)+'</div><div class="input-row"><input type="number" id="'+id+'" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-family:\'DM Mono\',monospace;font-size:12px"></div>';
+  }
+  // 'text' or 'tags' both render as a plain text input; 'tags' gets comma-split on save
+  return '<div class="sheet-label">'+escHtml(f.label)+'</div><div class="input-row"><input type="text" id="'+id+'" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-family:\'DM Mono\',monospace;font-size:12px"></div>';
+}
+
+function openGenericEntrySheet(type){
+  var cfg=ENTRY_TYPE_CONFIG[type];
+  document.getElementById('sheetGeneric').dataset.type=type;
+  document.getElementById('genericSheetTitle').textContent='Neuer Eintrag · '+cfg.label;
+  document.getElementById('genericTitle').value='';
+  document.getElementById('genericTags').value='';
+  document.getElementById('genericBody').value=cfg.bodyTemplate||'';
+  document.getElementById('genericExtraFields').innerHTML=cfg.extraFields.map(extraFieldHtml).join('');
+  _genericImageUrl=null;
+  document.getElementById('genericImagePreview').textContent='';
+  var imgRow=document.getElementById('genericImageRow');
+  imgRow.style.display=cfg.allowImage?'block':'none';
+  document.getElementById('genericImageInput').value='';
+  document.getElementById('sheetGeneric').classList.add('visible');
+}
+
+document.getElementById('genericImageInput').addEventListener('change',async function(e){
+  var file=e.target.files[0];
+  if(!file) return;
+  var preview=document.getElementById('genericImagePreview');
+  preview.textContent='Lädt hoch…';
+  try{
+    var fd=new FormData();
+    fd.append('file',file);
+    var r=await fetch('/api/upload',{method:'POST',headers:{'X-API-Key':UPLOAD_API_KEY},body:fd});
+    if(!r.ok) throw new Error(r.status);
+    var text=(await r.text()).trim();
+    _genericImageUrl=text.split('\n')[0];
+    preview.textContent='✓ hochgeladen';
+  }catch(err){
+    preview.textContent='Upload fehlgeschlagen: '+err.message;
+  }
+});
+
+async function saveGenericEntry(){
+  var type=document.getElementById('sheetGeneric').dataset.type;
+  var cfg=ENTRY_TYPE_CONFIG[type];
+  var fields={};
+  cfg.extraFields.forEach(function(f){
+    var el=document.getElementById('genericField_'+f.key);
+    if(!el) return;
+    if(f.type==='toggle') fields[f.key]=el.dataset.on==='true';
+    else if(f.type==='tags') fields[f.key]=el.value.split(',').map(function(s){return s.trim();}).filter(Boolean);
+    else if(f.type==='number') fields[f.key]=el.value?parseInt(el.value,10):null;
+    else fields[f.key]=el.value||null;
+  });
+  var tags=document.getElementById('genericTags').value.split(',').map(function(s){return s.trim();}).filter(Boolean);
+  var images=_genericImageUrl?[_genericImageUrl]:[];
+  var body=document.getElementById('genericBody').value;
+  if(_genericImageUrl) body='![](' + _genericImageUrl + ')\n\n' + body;
+  try{
+    var r=await fetch('/api/journal/entry',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        entry_type:type,
+        title:document.getElementById('genericTitle').value||null,
+        body:body,
+        tags:tags,
+        images:images,
+        fields:fields
+      })
+    });
+    if(!r.ok) throw new Error(r.status);
+    closeComposeSheet();
+    await loadFeed();
+  }catch(e){
+    alert('Speichern fehlgeschlagen: '+e.message);
+  }
+}
+
 /* ── Compose: native Mood-Eintrag ── */
 const ZUSAMMENHANG_TAGS=['Gesundheit','Fitness','Selbstfürsorge','Hobbys','Identität','Spiritualität','Gemeinschaft','Familie','Freund:innen','Partner:in','Beziehung & Partnersuche','Aufgaben','Arbeit','Bildung','Reisen','Wetter','Zeitgeschehen','Geld'];
 const BESCHREIBUNG_TAGS=['Angewidert','Ängstlich','Aufgeregt','Ausgeglichen','Beschämt','Besorgt','Beunruhigt','Dankbar','Einsam','Entmutigt','Enttäuscht','Erfüllt','Erleichtert','Erschöpft','Erstaunt','Freudig','Frustriert','Genervt','Gereizt','Gestresst','Gleichgültig','Glücklich','Hoffnungslos','Hoffnungsvoll','Leidenschaftlich','Mutig','Neiderfüllt','Ruhig','Schuldig','Stolz','Traurig','Überfordert','Überrascht','Verärgert','Vergnügt','Verlegen','Zufrieden','Zuversichtlich'];
@@ -1425,7 +1567,26 @@ function toggleTagesreflexion(btn){
   btn.textContent=_tagesreflexion?'Ja':'Nein';
   btn.classList.toggle('active',_tagesreflexion);
 }
+/* Typ-Auswahl → routet zu Mood-Sheet oder generischem Sheet */
 function openComposeSheet(){
+  var el=document.getElementById('typePickerList');
+  el.innerHTML=Object.keys(ENTRY_TYPE_CONFIG).map(function(t){
+    var cfg=ENTRY_TYPE_CONFIG[t];
+    return '<button class="tag-btn" style="border-color:'+cfg.color+';color:'+cfg.color+'" onclick="selectEntryType(\''+t+'\')">'+cfg.label+'</button>';
+  }).join('');
+  document.getElementById('sheetTypePicker').classList.add('visible');
+}
+function selectEntryType(type){
+  document.getElementById('sheetTypePicker').classList.remove('visible');
+  if(type==='mood') openMoodSheet();
+  else openGenericEntrySheet(type);
+}
+function closeComposeSheet(){
+  ['sheetTypePicker','sheetGeneric','sheetMood'].forEach(function(id){
+    document.getElementById(id).classList.remove('visible');
+  });
+}
+function openMoodSheet(){
   _selectedZusammenhang=[];_selectedBeschreibung=[];_tagesreflexion=false;
   document.getElementById('valenzSlider').value=0;
   document.getElementById('valenzValue').textContent='0';
@@ -1434,9 +1595,6 @@ function openComposeSheet(){
   var tr=document.getElementById('tagesreflexionToggle');tr.textContent='Nein';tr.classList.remove('active');
   document.getElementById('moodBody').value='';
   document.getElementById('sheetMood').classList.add('visible');
-}
-function closeComposeSheet(){
-  document.getElementById('sheetMood').classList.remove('visible');
 }
 async function saveMoodEntry(){
   var valenz=parseInt(document.getElementById('valenzSlider').value,10);
