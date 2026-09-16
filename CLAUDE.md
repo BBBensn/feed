@@ -9,18 +9,29 @@ Ablageort: `~/Documents/Coding/bensn-hub/feed/CLAUDE.md`
 
 - **Name:** Bensn-Feed
 - **Domain:** feed.bensn.me
-- **Version:** v2.0.3 (Frontend + Backend, Health-Integration)
-- **Status:** active — wird gerade grundlegend umgebaut (siehe Roadmap: Obsidian-Ablösung)
+- **Version:** v2.1.0 (natives Mood-Compose + journal_entries)
+- **Status:** active — Obsidian-Ablösung läuft (Mood erledigt, 8 weitere Typen + volle
+  Historien-Migration folgen, siehe Roadmap)
 - **Stack:** Vanilla JS + Flask (Python), bensn.me Design System (`/shared/bensn.css`+`bensn.js`)
 
 ---
 
 ## Was ist das Projekt?
 
-Persönlicher scrollbarer Feed auf `feed.bensn.me`. Zeigt aktuell alle Obsidian Journal-Notes
-aus `01_Journal` (per Git-Sync gespiegelt) gemischt mit Worktracker-Events (Schichten/Pausen,
-live von der hub-api abgefragt). Aktuell noch kein eigenes Eingabe-Interface — das ändert sich
-im laufenden Umbau (siehe Roadmap).
+Persönlicher scrollbarer Feed auf `feed.bensn.me`. Zeigt Obsidian Journal-Notes aus
+`01_Journal` (per Git-Sync gespiegelt, für 8 von 9 Typen noch die einzige Quelle),
+native `journal_entries` aus Postgres (aktuell nur `mood`, siehe unten), Worktracker-Events
+und Health-Events (Medikamente/Blutdruck/Mahlzeiten) gemischt in einer Timeline.
+
+**Mood-Einträge werden seit v2.1.0 nativ im Feed erstellt** — ein "+"-Button öffnet ein
+Apple-Journal-artiges Check-in (Valenz-Slider -100..100, Zusammenhang-/Beschreibung-
+Multiselect mit den echten Tag-Listen aus der alten ModalForms-Config, Tagesreflexion-
+Toggle), kein Obsidian mehr nötig dafür. Alle 71 historischen Mood-Notes (22.03.–02.05.2026)
+wurden per `scripts/migrate_mood_notes.py` migriert (`migrated_from: obsidian` bzw.
+`apple_journal` für die ~ursprünglich aus Apple Journal importierten). Eine Note
+(`2026-05-06-1344-mood.md`) hatte kaputtes Frontmatter (nicht ausgeführtes Templater-Syntax
+statt echter Werte, vermutlich ein Templater-Fehler beim Erstellen) und wurde übersprungen —
+sie enthält ohnehin keine echten Mood-Daten.
 
 Öffentlicher Teilbereich: `feed.bensn.me/shared` — gefiltert per `share_config.json` +
 `private: true` im Note-Frontmatter.
@@ -39,6 +50,9 @@ im laufenden Umbau (siehe Roadmap).
 ├── api/
 │   ├── app.py           ← Flask Backend
 │   └── requirements.txt
+├── schema.sql            ← journal_entries (per pg_dump/CREATE TABLE, kein Migrationsrunner)
+├── scripts/
+│   └── migrate_mood_notes.py   ← einmaliges Migrationsskript (siehe Kommentar im File)
 ├── Desing/              ← frühe Design-Mockups/Prototypen (Referenz, kein Live-Code)
 ├── docs/changelogs/
 └── CLAUDE.md
@@ -96,8 +110,11 @@ ssh bensn systemctl restart feed-api
 |-------|------|--------------|
 | `GET /api/feed` | Cookie (bensn-auth) | Alle Notes (privat) |
 | `GET /api/feed/shared` | öffentlich | Gefilterte Notes per share_config.json |
-| `GET /api/feed/combined` | Cookie (bensn-auth) | Notes + Worktracker-Events |
-| `GET /api/feed/combined/shared` | öffentlich | Shared Notes + Worktracker (ohne Details) |
+| `GET /api/feed/combined` | Cookie (bensn-auth) | Notes + `journal_entries` + Worktracker + Health-Events |
+| `GET /api/feed/combined/shared` | öffentlich | Shared Notes + `journal_entries` (gefiltert) + Worktracker (ohne Details, KEINE Health-Events) |
+| `GET/POST /api/journal/entries`, `/entry` | Cookie (bensn-auth) | Native Journal-Einträge CRUD (aktuell nur `mood` im Compose-UI genutzt) |
+| `PATCH/DELETE /api/journal/entry/<id>` | Cookie (bensn-auth) | Editieren / soft-löschen |
+| `GET /api/journal/mood-summary` | Cookie (bensn-auth) | Valenz-Verlauf für Dashboards |
 | `GET /api/feed/stats` | Cookie (bensn-auth) | Statistiken nach Typ/Folder |
 | `GET /api/feed/<note_id>` | Cookie (bensn-auth) | Einzelne Note |
 | `GET/POST /api/share/config` | Cookie / `X-API-Key` (POST) | Sharing-Config lesen/schreiben |
@@ -184,8 +201,12 @@ ein zweites HTTP-Client-Pattern wäre unnötig gewesen. Nur in `feed_combined()`
 
 ## Projekt-spezifische Konventionen
 
-- Backend (`app.py`) liest den Vault direkt von Disk — kein DB-Cache (ändert sich mit dem Umbau,
-  sobald `journal_entries` in Postgres existiert)
+- Backend (`app.py`) liest den Vault direkt von Disk für die 8 noch-nicht-migrierten Typen —
+  `journal_entries` in Postgres ist die Quelle für `mood`, sobald ein Typ vollständig auf
+  natives Compose umgestellt ist, sollte sein Obsidian-Lesepfad entfallen (siehe Roadmap)
+- `journal_row_to_note()` mappt DB-Zeilen auf exakt dasselbe Shape wie `load_note()`
+  (type/title/content/date/tags/meta) — der Feed-Renderer behandelt beide Quellen identisch,
+  ohne das zu wissen
 - `git pull --ff-only` funktioniert auf dem Server nicht → immer `fetch --all && reset --hard origin/main`
 - Service Worker Cache: `sw.js`-Cache-Version bumpen bei PWA-Updates
 
@@ -200,7 +221,7 @@ ein zweites HTTP-Client-Pattern wäre unnötig gewesen. Nur in `feed_combined()`
 | v1.7.0–v1.7.9 | Sharing-System, Migration auf bensn-auth Cookie | ✅ deployed |
 | v2.0.0–v2.0.2 | Login-Overlay entfernt, Wikilink-Stats-Drawer | ✅ deployed |
 | v2.0.3 | Health → Feed Integration (Medikamente/BP/Mahlzeiten als Timeline-Events) | ✅ deployed (2026-09-16) |
-| — | `journal_entries`-Schema + natives Mood-Compose + Mood-Migration | ⬜ geplant |
+| v2.1.0 | `journal_entries`-Schema + natives Mood-Compose + Mood-Migration (71 Notes) | ✅ deployed (2026-09-16) |
 | — | Compose-UI für restliche 8 Journal-Typen | ⬜ geplant |
 | — | Vollständige Historien-Migration + Obsidian-Decommission | ⬜ geplant |
 

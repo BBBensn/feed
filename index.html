@@ -646,6 +646,31 @@ footer {
 .badge-frueh { color: #FFB400; }
 .badge-nacht { color: var(--accent-blue); }
 .badge-nachmittag { color: #F96F5D; }
+
+/* ── Compose sheet (native mood entry) ── */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 200; display: none; align-items: flex-end; justify-content: center; }
+.overlay.visible { display: flex; }
+.overlay-sheet { background: #161616; border: 1px solid rgba(255,255,255,.12); border-radius: 16px 16px 0 0; padding: 1.5rem 1.25rem 2.5rem; width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; }
+.sheet-title { font-family: 'Syne', sans-serif; font-size: 1.3rem; font-weight: 800; margin-bottom: 1.25rem; letter-spacing: -.02em; }
+.sheet-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.valenz-slider { width: 100%; margin: .5rem 0 4px; accent-color: var(--accent-blue); }
+.valenz-labels { display: flex; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); margin-bottom: 1rem; }
+.valenz-value { text-align: center; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.6rem; margin-bottom: 4px; }
+.tag-picker { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+.tag-btn { font-family: 'DM Mono', monospace; font-size: 10.5px; padding: 5px 11px; border-radius: 6px; border: 1px solid var(--border); color: var(--muted); background: none; cursor: pointer; transition: all .15s; }
+.tag-btn:hover { border-color: var(--border-hover); color: var(--text); }
+.tag-btn.active { border-color: var(--accent-blue); color: var(--accent-blue); background: rgba(0,166,251,.08); }
+.note-input { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; outline: none; margin-bottom: 1rem; resize: vertical; min-height: 60px; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: .6rem 0; margin-bottom: 1rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); font-family: 'DM Mono', monospace; font-size: 12px; }
+.sheet-btns { display: flex; gap: .5rem; }
+.btn-save { flex: 1; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: .06em; background: var(--green); color: #0a0a0b; border: none; border-radius: 8px; padding: 11px; cursor: pointer; }
+.btn-cancel { font-family: 'DM Mono', monospace; font-size: 11px; background: none; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 11px 16px; cursor: pointer; }
+
+/* ── Mood card visualization ── */
+.mood-bar-track { height: 6px; border-radius: 3px; background: rgba(255,255,255,.07); margin: .4rem 0 .6rem; position: relative; overflow: hidden; }
+.mood-bar-fill { height: 100%; border-radius: 3px; position: absolute; top: 0; }
+.mood-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: .4rem; }
+.mood-tag { font-family: 'DM Mono', monospace; font-size: 10px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); color: var(--muted); }
 </style>
 </head>
 <body>
@@ -666,6 +691,7 @@ footer {
   </nav>
 
   <div class="toolbar">
+    <button class="tb-sync" id="composeBtn" title="Neuer Eintrag" onclick="openComposeSheet()"><span class="material-symbols-outlined">add</span></button>
     <button class="tb-sync" id="syncBtn" title="Sync"><span class="material-symbols-outlined">sync</span></button>
     <a class="tb-sync" href="/shares" title="Share-Links verwalten" style="text-decoration:none;display:flex;align-items:center;justify-content:center"><span class="material-symbols-outlined">share</span></a>
     <button class="tb-filter-toggle tb-active" id="filterToggle">Filter</button>
@@ -720,6 +746,35 @@ footer {
   <button id="lightbox-next" onclick="lightboxStep(1)">›</button>
   <div id="lightbox-counter"></div>
 </div>
+
+<!-- ═══ SHEET: MOOD-EINTRAG ═══ -->
+<div class="overlay" id="sheetMood" onclick="if(event.target===this) closeComposeSheet()">
+  <div class="overlay-sheet">
+    <div class="sheet-title">Wie fühlst du dich?</div>
+    <div class="valenz-value" id="valenzValue">0</div>
+    <input type="range" class="valenz-slider" id="valenzSlider" min="-100" max="100" value="0" oninput="document.getElementById('valenzValue').textContent=this.value">
+    <div class="valenz-labels"><span>sehr unangenehm</span><span>sehr angenehm</span></div>
+
+    <div class="sheet-label">Womit hängt's zusammen?</div>
+    <div class="tag-picker" id="zusammenhangTags"></div>
+
+    <div class="sheet-label">Wie fühlt sich das an?</div>
+    <div class="tag-picker" id="beschreibungTags"></div>
+
+    <div class="toggle-row">
+      <span>Tagesreflexion (Zusammenfassung des ganzen Tages)</span>
+      <button class="tag-btn" id="tagesreflexionToggle" onclick="toggleTagesreflexion(this)">Nein</button>
+    </div>
+
+    <textarea class="note-input" id="moodBody" placeholder="Ein paar Worte dazu (optional)…"></textarea>
+
+    <div class="sheet-btns">
+      <button class="btn-cancel" onclick="closeComposeSheet()">Abbrechen</button>
+      <button class="btn-save" onclick="saveMoodEntry()">Speichern</button>
+    </div>
+  </div>
+</div>
+
 <script src="/shared/bensn.js"></script>
 <script>
 /* ── Auth ── */
@@ -1120,10 +1175,11 @@ function renderNote(note,idx){
   const titleDisplay=searchQuery&&ct?highlight(ct,searchQuery):escHtml(ct);
   const titleHtml=ct&&ct.length>1?'<div class="note-title">'+titleDisplay+'</div>':'';
   const metaHtml='<div class="note-meta"><span class="note-type-badge '+badgeClass(type)+'">'+typeLabel(type)+'</span><span class="note-date">'+fmtTime(note.date)+'</span></div>';
+  const extraHtml=moodVizHtml(note);
   if(note.images&&note.images.length>0){
     const grid=buildPhotoGrid(note.images);
     const textOnly=raw.split('\n').filter(function(l){return !/^!\[/.test(l.trim());}).join('\n').trim();
-    el.innerHTML=metaHtml+titleHtml;
+    el.innerHTML=metaHtml+titleHtml+extraHtml;
     el.appendChild(grid);
     if(textOnly){const body=document.createElement('div');body.className='note-body';body.style.marginTop='.75rem';body.innerHTML=renderMarkdown(textOnly,ct,type);el.appendChild(body);}
     processEmbeds(el);
@@ -1131,17 +1187,34 @@ function renderNote(note,idx){
     const shortRaw=raw.slice(0,400).trimEnd()+'…';
     const contentMatch=searchQuery&&(raw.toLowerCase().includes(searchQuery.toLowerCase()))&&!(ct&&ct.toLowerCase().includes(searchQuery.toLowerCase()));
     const autoExpand=contentMatch;
-    el.innerHTML=metaHtml+titleHtml
+    el.innerHTML=metaHtml+titleHtml+extraHtml
       +'<div class="note-body note-body-preview">'+renderMarkdown(shortRaw,ct,type)+'</div>'
       +'<div class="note-body note-body-full">'+renderMarkdown(raw,ct,type)+'</div>'
       +'<button class="note-expand" onclick="toggleExpand(\''+id+'\',this)">'+(autoExpand?'less ▴':'more ▾')+'</button>';
     if(autoExpand) el.classList.add('expanded');
     processEmbeds(el);
   } else {
-    el.innerHTML=metaHtml+titleHtml+'<div class="note-body">'+renderMarkdown(raw,ct,type)+'</div>';
+    el.innerHTML=metaHtml+titleHtml+extraHtml+'<div class="note-body">'+renderMarkdown(raw,ct,type)+'</div>';
     processEmbeds(el);
   }
   return el;
+}
+
+/* Visualizes valenz/tags for natively-composed mood entries (journal_entries.fields).
+   Obsidian-authored mood notes have no such structured meta, so they just render as
+   plain markdown text below — this only kicks in once fields.valenz is present. */
+function moodVizHtml(note){
+  if((note.type||'').toLowerCase()!=='mood') return '';
+  const f=note.meta||{};
+  if(f.valenz===undefined||f.valenz===null||f.valenz==='') return '';
+  const v=parseInt(f.valenz,10);
+  const pct=(v+100)/2;
+  const color=v<0?'#f96f5d':'#b8ebd0';
+  let html='<div class="mood-bar-track"><div class="mood-bar-fill" style="left:'+(v<0?pct:50)+'%;width:'+Math.abs(pct-50)+'%;background:'+color+'"></div></div>';
+  const allTags=[].concat(f.zusammenhang||[],f.beschreibung||[]);
+  if(allTags.length) html+='<div class="mood-tags">'+allTags.map(function(t){return '<span class="mood-tag">'+escHtml(t)+'</span>';}).join('')+'</div>';
+  if(String(f.tagesreflexion).toLowerCase()==='true') html+='<div class="mood-tag" style="display:inline-block;margin-bottom:.4rem">Tagesreflexion</div>';
+  return html;
 }
 
 function renderFeed(notes,append){
@@ -1328,6 +1401,63 @@ document.getElementById('syncBtn').addEventListener('click',async function(){
 function showLoginOverlay(){
   /* Fallback: bei 401 schickt Nginx zum Login */
   window.location.href='https://auth.bensn.me/auth/login?next='+encodeURIComponent(window.location.href);
+}
+
+/* ── Compose: native Mood-Eintrag ── */
+const ZUSAMMENHANG_TAGS=['Gesundheit','Fitness','Selbstfürsorge','Hobbys','Identität','Spiritualität','Gemeinschaft','Familie','Freund:innen','Partner:in','Beziehung & Partnersuche','Aufgaben','Arbeit','Bildung','Reisen','Wetter','Zeitgeschehen','Geld'];
+const BESCHREIBUNG_TAGS=['Angewidert','Ängstlich','Aufgeregt','Ausgeglichen','Beschämt','Besorgt','Beunruhigt','Dankbar','Einsam','Entmutigt','Enttäuscht','Erfüllt','Erleichtert','Erschöpft','Erstaunt','Freudig','Frustriert','Genervt','Gereizt','Gestresst','Gleichgültig','Glücklich','Hoffnungslos','Hoffnungsvoll','Leidenschaftlich','Mutig','Neiderfüllt','Ruhig','Schuldig','Stolz','Traurig','Überfordert','Überrascht','Verärgert','Vergnügt','Verlegen','Zufrieden','Zuversichtlich'];
+let _selectedZusammenhang=[],_selectedBeschreibung=[],_tagesreflexion=false;
+
+function tagPickerHtml(tags,selected,groupName){
+  return tags.map(function(t){
+    var active=selected.indexOf(t)>=0;
+    return '<button class="tag-btn'+(active?' active':'')+'" onclick="toggleComposeTag(\''+groupName+'\',\''+t.replace(/'/g,"\\'")+'\',this)">'+escHtml(t)+'</button>';
+  }).join('');
+}
+function toggleComposeTag(group,tag,btn){
+  var arr=group==='zusammenhang'?_selectedZusammenhang:_selectedBeschreibung;
+  var i=arr.indexOf(tag);
+  if(i>=0){arr.splice(i,1);btn.classList.remove('active');}
+  else{arr.push(tag);btn.classList.add('active');}
+}
+function toggleTagesreflexion(btn){
+  _tagesreflexion=!_tagesreflexion;
+  btn.textContent=_tagesreflexion?'Ja':'Nein';
+  btn.classList.toggle('active',_tagesreflexion);
+}
+function openComposeSheet(){
+  _selectedZusammenhang=[];_selectedBeschreibung=[];_tagesreflexion=false;
+  document.getElementById('valenzSlider').value=0;
+  document.getElementById('valenzValue').textContent='0';
+  document.getElementById('zusammenhangTags').innerHTML=tagPickerHtml(ZUSAMMENHANG_TAGS,_selectedZusammenhang,'zusammenhang');
+  document.getElementById('beschreibungTags').innerHTML=tagPickerHtml(BESCHREIBUNG_TAGS,_selectedBeschreibung,'beschreibung');
+  var tr=document.getElementById('tagesreflexionToggle');tr.textContent='Nein';tr.classList.remove('active');
+  document.getElementById('moodBody').value='';
+  document.getElementById('sheetMood').classList.add('visible');
+}
+function closeComposeSheet(){
+  document.getElementById('sheetMood').classList.remove('visible');
+}
+async function saveMoodEntry(){
+  var valenz=parseInt(document.getElementById('valenzSlider').value,10);
+  var body=document.getElementById('moodBody').value||'';
+  try{
+    var r=await fetch('/api/journal/entry',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        entry_type:'mood',
+        body:body,
+        tags:['mood'],
+        fields:{valenz:valenz,zusammenhang:_selectedZusammenhang,beschreibung:_selectedBeschreibung,tagesreflexion:_tagesreflexion}
+      })
+    });
+    if(!r.ok) throw new Error(r.status);
+    closeComposeSheet();
+    await loadFeed();
+  }catch(e){
+    alert('Speichern fehlgeschlagen: '+e.message);
+  }
 }
 
 /* ── PWA Service Worker ── */

@@ -571,10 +571,10 @@ def fetch_meal_events(limit=100):
 
 @app.route("/api/feed/combined")
 def feed_combined():
-    """Private combined feed: journal notes + worktracker + health events.
-    Health events are intentionally NOT included in feed_combined_shared() below —
-    medical data has no business appearing on a link shared with other people."""
-    notes = load_all_notes()
+    """Private combined feed: Obsidian notes + native journal entries + worktracker +
+    health events. Health events are intentionally NOT included in feed_combined_shared()
+    below — medical data has no business appearing on a link shared with other people."""
+    notes = load_all_notes() + fetch_journal_events(limit=200)
     events = fetch_shift_events(limit=100, include_details=True)
     events += fetch_medication_events(limit=100)
     events += fetch_bp_events(limit=100)
@@ -592,7 +592,7 @@ def feed_combined():
 def feed_combined_shared():
     """Public combined feed: shared notes + worktracker events (no details)."""
     config = load_share_config()
-    notes = load_all_notes()
+    notes = load_all_notes() + fetch_journal_events(limit=200)
     shared_notes = [n for n in notes if is_note_shared(n, config)]
     events = fetch_shift_events(limit=100, include_details=False)
     combined = shared_notes + events
@@ -705,7 +705,7 @@ def share_feed(token):
 
     # Load all notes + work events
     config = load_share_config()
-    notes = load_all_notes()
+    notes = load_all_notes() + fetch_journal_events(limit=200)
     # Use share's allowed/blocked types to filter — if none set, use global shared_types
     if not share.get('allowed_types') and not share.get('blocked_types'):
         notes = [n for n in notes if is_note_shared(n, config)]
@@ -872,6 +872,200 @@ def get_wikilinks():
                 pass
     return jsonify(sorted(links))
 
+
+# ── Journal entries (native replacement for Obsidian-authored notes) ─────────────
+# Starts with 'mood' only (see CLAUDE.md) — the other 8 entry_type values are allowed by
+# the schema's CHECK constraint already, but this API doesn't discriminate by type; any
+# type-specific validation lives in the frontend compose form for now.
+
+JOURNAL_TYPE_COLORS = {
+    'diary': '#e5b181', 'mood': '#b8ebd0', 'reflexion': '#ffb400',
+    'symptome': '#f96f5d', 'therapie': '#9c3848', 'fits': '#C9B6BE',
+    'arbeit': '#065143', 'ideas': '#6622cc', 'project_log': '#1d4e89',
+}
+
+def journal_row_to_note(row):
+    """Shape a journal_entries row like an Obsidian-note dict so the existing feed
+    renderer (which reads note.type/title/content/date/tags) handles both transparently."""
+    row = dict(row)
+    return {
+        'id': f"journal-{row['id']}",
+        'db_id': str(row['id']),
+        'type': row['entry_type'],
+        'folder': row['entry_type'],
+        'title': row.get('title'),
+        'date': utc_to_vienna_naive(row['entry_date'].isoformat()) if row.get('entry_date') else None,
+        'date_modified': row['updated_at'].isoformat() if row.get('updated_at') else None,
+        'tags': row.get('tags') or [],
+        'content': row.get('body') or '',
+        'images': row.get('images') or [],
+        'media_links': [],
+        'meta': row.get('fields') or {},
+        'path': None,
+    }
+
+
+def fetch_journal_events(limit=200):
+    if not DB_URL:
+        return []
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT * FROM journal_entries WHERE deleted = FALSE '
+            'ORDER BY entry_date DESC LIMIT %s',
+            (limit,)
+        )
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception:
+        return []
+    return [journal_row_to_note(r) for r in rows]
+
+
+@app.route('/api/journal/entries', methods=['GET'])
+def list_journal_entries():
+    if not DB_URL:
+        return jsonify({'error': 'DB not configured'}), 503
+    entry_type = request.args.get('type')
+    try:
+        limit = int(request.args.get('limit', 100))
+        offset = int(request.args.get('offset', 0))
+    except ValueError:
+        limit, offset = 100, 0
+    sql = 'SELECT * FROM journal_entries WHERE deleted = FALSE'
+    params = []
+    if entry_type:
+        sql += ' AND entry_type = %s'
+        params.append(entry_type)
+    sql += ' ORDER BY entry_date DESC LIMIT %s OFFSET %s'
+    params += [limit, offset]
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 503
+    return jsonify([journal_row_to_note(r) for r in rows])
+
+
+@app.route('/api/journal/entry', methods=['POST'])
+def create_journal_entry():
+    if not DB_URL:
+        return jsonify({'error': 'DB not configured'}), 503
+    d = request.get_json(force=True)
+    if not d.get('entry_type'):
+        return jsonify({'error': 'entry_type required'}), 400
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO journal_entries
+                   (entry_type, entry_date, title, body, tags, fields, images, source)
+               VALUES (%s, COALESCE(%s, NOW()), %s, %s, %s, %s, %s, %s)
+               RETURNING *""",
+            (d['entry_type'], d.get('entry_date'), d.get('title'), d.get('body'),
+             d.get('tags', []), json.dumps(d.get('fields', {})), d.get('images', []),
+             d.get('source', 'web'))
+        )
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 503
+    return jsonify(journal_row_to_note(row)), 201
+
+
+@app.route('/api/journal/entry/<entry_id>', methods=['PATCH'])
+def update_journal_entry(entry_id):
+    if not DB_URL:
+        return jsonify({'error': 'DB not configured'}), 503
+    d = request.get_json(force=True)
+    allowed = ['entry_date', 'title', 'body', 'tags', 'images']
+    fields, values = [], []
+    for k in allowed:
+        if k in d:
+            fields.append(f'{k} = %s')
+            values.append(d[k])
+    if 'fields' in d:
+        fields.append('fields = %s')
+        values.append(json.dumps(d['fields']))
+    if not fields:
+        return jsonify({'error': 'no valid fields'}), 400
+    fields.append('updated_at = NOW()')
+    values.append(entry_id)
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            f'UPDATE journal_entries SET {", ".join(fields)} WHERE id = %s RETURNING *',
+            values
+        )
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 503
+    if not row:
+        return jsonify({'error': 'not found'}), 404
+    return jsonify(journal_row_to_note(row))
+
+
+@app.route('/api/journal/entry/<entry_id>', methods=['DELETE'])
+def delete_journal_entry(entry_id):
+    if not DB_URL:
+        return jsonify({'error': 'DB not configured'}), 503
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            'UPDATE journal_entries SET deleted = TRUE WHERE id = %s RETURNING id',
+            (entry_id,)
+        )
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 503
+    if not row:
+        return jsonify({'error': 'not found'}), 404
+    return jsonify({'status': 'deleted', 'id': entry_id})
+
+
+@app.route('/api/journal/mood-summary', methods=['GET'])
+def journal_mood_summary():
+    """Recent mood trend (valenz over time) for dashboards to consume."""
+    if not DB_URL:
+        return jsonify({'error': 'DB not configured'}), 503
+    try:
+        limit = int(request.args.get('limit', 30))
+    except ValueError:
+        limit = 30
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT entry_date, fields->>'valenz' AS valenz FROM journal_entries
+               WHERE entry_type = 'mood' AND deleted = FALSE
+               ORDER BY entry_date DESC LIMIT %s""",
+            (limit,)
+        )
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 503
+    return jsonify([
+        {'date': r['entry_date'].isoformat(), 'valenz': int(r['valenz']) if r['valenz'] is not None else None}
+        for r in rows
+    ])
 
 
 if __name__ == "__main__":
