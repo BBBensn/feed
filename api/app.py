@@ -359,7 +359,7 @@ def fetch_bp_events(limit=100):
         conn = get_db()
         cur = conn.cursor()
         cur.execute('''
-            SELECT id, measured_at, systolic, diastolic, pulse
+            SELECT id, measured_at, systolic, diastolic, pulse, notes
             FROM health_bp_logs WHERE deleted = FALSE
             ORDER BY measured_at DESC LIMIT %s
         ''', (limit,))
@@ -376,6 +376,7 @@ def fetch_bp_events(limit=100):
         'systolic': r['systolic'],
         'diastolic': r['diastolic'],
         'pulse': r['pulse'],
+        'notes': r['notes'],
     } for r in rows]
 
 

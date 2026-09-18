@@ -975,7 +975,9 @@ const SERVICE_EVENTS = {
     body:n=>{
       let h='<div class="work-stat-row"><div class="work-stat"><div class="work-stat-val">'+n.systolic+'/'+n.diastolic+'</div><div class="work-stat-label">mmHg</div></div>';
       if(n.pulse) h+='<div class="work-stat"><div class="work-stat-val">'+n.pulse+'</div><div class="work-stat-label">Puls</div></div>';
-      return h+'</div>';
+      h+='</div>';
+      if(n.notes) h+=segBody(n.notes);
+      return h;
     } },
   meal_logged: { label:'Mahlzeit', color:'#22d3d3', group:'health',
     body:n=>segHeadline(escHtml(n.label||'Mahlzeit'))+(n.description?segBody(n.description):'') },
