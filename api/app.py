@@ -9,7 +9,7 @@ import re
 import json
 import hmac
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from flask import Flask, jsonify, request
 from PIL import Image, ImageOps
@@ -467,34 +467,65 @@ def fetch_weight_events(limit=200):
 # ── Oura integration ─────────────────────────────────────────────────────────
 # health.bensn.me's Oura sync writes into the same shared DB, same read-only pattern.
 
+SLEEP_CLUSTER_GAP = timedelta(hours=3)
+
+
 def fetch_sleep_events(limit=100):
-    """Fetch recent Oura sleep periods and convert to feed events. Uses bedtime_end
-    (wake time) as the event's timestamp — you reflect on a night's sleep in the
-    morning after it, not while it's still happening."""
+    """Fetch recent Oura sleep and convert to feed events. Uses bedtime_end (wake time)
+    as the event's timestamp — you reflect on a night's sleep in the morning after it, not
+    while it's still happening.
+
+    Oura's `day` field is NOT a reliable "one night" key on its own — verified against real
+    synced data, it sometimes buckets two entirely separate nights (~24h apart) or a night
+    plus a much-later daytime nap under the same `day`. So periods are only merged into one
+    event when the gap between them is small enough to plausibly be "woke up briefly and
+    fell back asleep" (< SLEEP_CLUSTER_GAP); a larger gap becomes a separate event even if
+    Oura tagged both with the same `day`. Same logic as health-api's _merge_nightly_sleep(),
+    duplicated here since this is a separate service."""
     if not DB_URL:
         return []
     try:
         conn = get_db()
         cur = conn.cursor()
         cur.execute('''
-            SELECT id, bedtime_end, total_sleep_duration, sleep_score, efficiency
+            SELECT id, day, type, bedtime_start, bedtime_end, total_sleep_duration,
+                   sleep_score, efficiency
             FROM health_oura_sleep
-            ORDER BY bedtime_end DESC LIMIT %s
-        ''', (limit,))
+            ORDER BY bedtime_start DESC LIMIT %s
+        ''', (limit * 4,))
         rows = cur.fetchall()
         cur.close()
         conn.close()
     except Exception:
         return []
 
-    return [{
-        'id': f'sleep-{r["id"]}',
-        'type': 'sleep_logged',
-        'date': utc_to_vienna_naive(r['bedtime_end'].isoformat()),
-        'total_sleep_duration': r['total_sleep_duration'],
-        'sleep_score': r['sleep_score'],
-        'efficiency': r['efficiency'],
-    } for r in rows]
+    by_day = {}
+    for r in rows:
+        if r['type'] not in ('long_sleep', 'sleep'):
+            continue
+        by_day.setdefault(r['day'], []).append(r)
+
+    events = []
+    for day, periods in by_day.items():
+        periods = sorted(periods, key=lambda p: p['bedtime_start'])
+        clusters = []
+        for p in periods:
+            if clusters and (p['bedtime_start'] - clusters[-1][-1]['bedtime_end']) <= SLEEP_CLUSTER_GAP:
+                clusters[-1].append(p)
+            else:
+                clusters.append([p])
+        for cluster in clusters:
+            main = max(cluster, key=lambda p: p['total_sleep_duration'] or 0)
+            events.append({
+                'id': f'sleep-{main["id"]}',
+                'type': 'sleep_logged',
+                'date': utc_to_vienna_naive(max(p['bedtime_end'] for p in cluster).isoformat()),
+                'total_sleep_duration': sum(p['total_sleep_duration'] or 0 for p in cluster),
+                'sleep_score': main['sleep_score'],
+                'efficiency': main['efficiency'],
+            })
+    events.sort(key=lambda e: e['date'], reverse=True)
+    return events[:limit]
 
 
 def fetch_heartrate_summary_events(limit=200):

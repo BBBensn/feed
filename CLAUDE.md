@@ -9,7 +9,7 @@ Ablageort: `~/Documents/Coding/bensn-hub/feed/CLAUDE.md`
 
 - **Name:** Bensn-Feed
 - **Domain:** feed.bensn.me
-- **Version:** v2.7.0 (Medikamenten-Anmerkungen/Gewicht/Schlaf im Feed + Event-Registry-Refactor)
+- **Version:** v2.7.1 (Oura-Schlaf-Merge korrigiert — zeitbasiert statt nach `day`)
 - **Status:** active — Obsidian-Ablösung vollständig abgeschlossen (Compose-UI für alle 9
   Typen, komplette Historie migriert, Git-Sync abgeschaltet)
 - **Stack:** Vanilla JS + Flask (Python) + PostgreSQL, bensn.me Design System (`/shared/bensn.css`+`bensn.js`)
@@ -238,6 +238,13 @@ den Feed fluten. Der Tages-Wert bekommt einen synthetischen Mittags-Zeitstempel
 (`YYYY-MM-DDT12:00:00`), da er sich auf den ganzen Tag bezieht, nicht auf einen Augenblick.
 Nur in `feed_combined()` gemergt (privat).
 
+**Korrektur v2.7.1 (2026-09-18):** `fetch_sleep_events()` fasste anfangs alle Perioden mit
+gleichem Oura-`day`-Wert zusammen — das erwies sich als falsch: Oura vergibt denselben `day`
+teils an zwei komplett unabhängige Nächte oder eine Nacht + einen viel späteren Tages-Nap
+(mit echten Daten verifiziert). Jetzt zeitbasierte Cluster-Erkennung (`SLEEP_CLUSTER_GAP`,
+3 Stunden) statt reinem `day`-Gruppieren — dieselbe Logik wie in health-api's
+`_merge_nightly_sleep()`, siehe dessen CLAUDE.md-Eintrag für die volle Herleitung.
+
 ---
 
 ## Event-Typ-Registry (Frontend, seit v2.7.0)
@@ -308,6 +315,7 @@ mehr nach der `feed_combined()`-Stelle, die geändert werden muss.
 | v2.5.1 | `.btn-pill`/`.btn-save`/`.btn-cancel` aus lokalem CSS entfernt, kommen jetzt zentral aus `bensn-meta/shared/bensn.css` — keine visuelle Änderung, reine Konsolidierung | ✅ deployed (2026-09-16) |
 | v2.6.0 | Tracking-Integration: `tracking_entries` (nur `entry_type='zaehler'`, also Konsum-Momente wie Red Bull/Zigarette/Ofen) erscheinen jetzt im privaten Feed, eigener `tracking`-Filter-Chip + eigene Akzentfarbe (`--c-tracking`, Lime — passend zu tracking.bensn.mes Landing-Page-Farbe) | ✅ deployed (2026-09-17) |
 | v2.7.0 | Medikamenten-Anmerkungen, Gewicht und Oura-Schlaf (+ Oura-Herzfrequenz als Tages-Zusammenfassung) erscheinen jetzt im Feed — die größte fehlende Lücke für ein "vollständiges Alltagsbild". Gleichzeitig Event-Typ-Registry eingeführt (`SERVICE_EVENTS` im Frontend, `PRIVATE_EVENT_FETCHERS` im Backend), damit ein neuer Typ nicht mehr an 8 verstreuten Stellen einzeln nachgezogen werden muss (genau das war der Grund, warum diese drei Quellen so lange fehlten) | ✅ deployed (2026-09-17) |
+| v2.7.1 | Bugfix: `fetch_sleep_events()` fasste Perioden fälschlich nach Oura's `day`-Feld zusammen (verschmolz teils zwei unabhängige Nächte) — jetzt zeitbasierte Cluster-Erkennung (`SLEEP_CLUSTER_GAP`, 3h), synchron zu health-apis `_merge_nightly_sleep()` | ✅ deployed (2026-09-18) |
 
 Details zur vollständigen Versionshistorie: `docs/changelogs/CHANGELOG.md`.
 
