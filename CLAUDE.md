@@ -9,7 +9,7 @@ Ablageort: `~/Documents/Coding/bensn-hub/feed/CLAUDE.md`
 
 - **Name:** Bensn-Feed
 - **Domain:** feed.bensn.me
-- **Version:** v2.7.2 (Blutdruck-Notizen im Feed sichtbar)
+- **Version:** v2.7.3 (Service-Worker-Bugfix für Safari/Mobilfunk)
 - **Status:** active — Obsidian-Ablösung vollständig abgeschlossen (Compose-UI für alle 9
   Typen, komplette Historie migriert, Git-Sync abgeschaltet)
 - **Stack:** Vanilla JS + Flask (Python) + PostgreSQL, bensn.me Design System (`/shared/bensn.css`+`bensn.js`)
@@ -317,6 +317,7 @@ mehr nach der `feed_combined()`-Stelle, die geändert werden muss.
 | v2.7.0 | Medikamenten-Anmerkungen, Gewicht und Oura-Schlaf (+ Oura-Herzfrequenz als Tages-Zusammenfassung) erscheinen jetzt im Feed — die größte fehlende Lücke für ein "vollständiges Alltagsbild". Gleichzeitig Event-Typ-Registry eingeführt (`SERVICE_EVENTS` im Frontend, `PRIVATE_EVENT_FETCHERS` im Backend), damit ein neuer Typ nicht mehr an 8 verstreuten Stellen einzeln nachgezogen werden muss (genau das war der Grund, warum diese drei Quellen so lange fehlten) | ✅ deployed (2026-09-17) |
 | v2.7.1 | Bugfix: `fetch_sleep_events()` fasste Perioden fälschlich nach Oura's `day`-Feld zusammen (verschmolz teils zwei unabhängige Nächte) — jetzt zeitbasierte Cluster-Erkennung (`SLEEP_CLUSTER_GAP`, 3h), synchron zu health-apis `_merge_nightly_sleep()` | ✅ deployed (2026-09-18) |
 | v2.7.2 | `fetch_bp_events()` selektiert jetzt `notes` mit, `bp_reading`-Event im Frontend zeigt sie als zusätzliche Zeile — Notizen zu einer Blutdruckmessung waren speicherbar, aber bisher weder hier noch in `health.bensn.me`s Verlauf sichtbar | ✅ deployed (2026-09-18) |
+| v2.7.3 | Bugfix: Service Worker konnte auf Safari/Mobilfunk komplett ausfallen ("FetchEvent.respondWith received an error: Returned response is null") — `fetch(...).catch(() => caches.match(...))` resolvte bei Netzwerkfehler + Cache-Miss zu `undefined`, was WebKit als fatalen Fehler wertet (Chromium verzeiht das). Bei `feed` besonders sichtbar, weil hier (anders als `health`/`tracking`) auch `/api/`-GETs vom Service Worker abgefangen werden. Cache-Fallback gibt jetzt immer ein echtes Response-Objekt zurück, notfalls eine 503-Antwort. Gleicher Fix in `health`/`tracking` (identischer sw.js-Code) | ✅ deployed (2026-09-19) |
 
 Details zur vollständigen Versionshistorie: `docs/changelogs/CHANGELOG.md`.
 
